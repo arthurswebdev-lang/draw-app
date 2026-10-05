@@ -1,6 +1,6 @@
 import { STRIDE } from '../types';
-import { distToSegmentSq, simplify } from './simplify';
-import { smooth } from './smooth';
+import { distToSegmentSq } from './simplify';
+import { polyline, smooth } from './smooth';
 
 export type Pt = { x: number; y: number };
 
@@ -41,23 +41,26 @@ export function strokeTouches(points: Float32Array, size: number, a: Pt, b: Pt, 
   return false;
 }
 
-/** Turn the smoothed curve into a dense list [x, y, x, y, ...] with spacing <= tol. */
-export function flatten(points: Float32Array, tol: number): number[] {
+/** How far a flattened curve may stray from the true curve, in world units. */
+export const FLAT_EPS = 0.02;
+
+/** The stroke's centerline as [x, y, x, y, ...], exact for a polyline, flattened for a smooth stroke. */
+export function centerline(points: Float32Array, poly: boolean): number[] {
   const out: number[] = [];
   let cx = 0, cy = 0;
-  for (const c of smooth(points)) {
+  for (const c of poly ? polyline(points) : smooth(points)) {
     if (c.t === 'dot') {
       out.push(c.x, c.y);
     } else if (c.t === 'M') {
       out.push(c.x, c.y);
       cx = c.x; cy = c.y;
     } else if (c.t === 'L') {
-      const n = Math.max(1, Math.ceil(Math.hypot(c.x - cx, c.y - cy) / tol));
-      for (let k = 1; k <= n; k++) out.push(cx + ((c.x - cx) * k) / n, cy + ((c.y - cy) * k) / n);
+      out.push(c.x, c.y);
       cx = c.x; cy = c.y;
     } else {
-      const est = Math.hypot(c.cx - cx, c.cy - cy) + Math.hypot(c.x - c.cx, c.y - c.cy);
-      const n = Math.max(2, Math.ceil(est / tol));
+      // Quadratic curve error is |A - 2C + B| / (4 n^2) for n pieces.
+      const bend = Math.hypot(cx - 2 * c.cx + c.x, cy - 2 * c.cy + c.y);
+      const n = Math.max(1, Math.ceil(Math.sqrt(bend / (4 * FLAT_EPS))));
       for (let k = 1; k <= n; k++) {
         const t = k / n, u = 1 - t;
         out.push(u * u * cx + 2 * u * t * c.cx + t * t * c.x, u * u * cy + 2 * u * t * c.cy + t * t * c.y);
@@ -76,31 +79,101 @@ function toPoints(xy: number[]): Float32Array {
   return out;
 }
 
+type Span = [number, number];
+
+/** Part of s + t*d (0 <= t <= 1) that lies inside the disc, or null. */
+function discSpan(sx: number, sy: number, dx: number, dy: number, c: Pt, r: number): Span | null {
+  const A = dx * dx + dy * dy;
+  if (A === 0) return null;
+  const fx = sx - c.x, fy = sy - c.y;
+  const B = 2 * (dx * fx + dy * fy);
+  const disc = B * B - 4 * A * (fx * fx + fy * fy - r * r);
+  if (disc < 0) return null;
+  const q = Math.sqrt(disc);
+  const t0 = Math.max(0, (-B - q) / (2 * A)), t1 = Math.min(1, (-B + q) / (2 * A));
+  return t0 < t1 ? [t0, t1] : null;
+}
+
+/** Clip t-range to {t : lo <= p0 + t*dp <= hi}. Returns false if nothing is left. */
+function clip(span: Span, p0: number, dp: number, lo: number, hi: number): boolean {
+  if (dp === 0) return p0 >= lo && p0 <= hi;
+  let t0 = (lo - p0) / dp, t1 = (hi - p0) / dp;
+  if (t0 > t1) [t0, t1] = [t1, t0];
+  span[0] = Math.max(span[0], t0);
+  span[1] = Math.min(span[1], t1);
+  return span[0] < span[1];
+}
+
 /**
- * Remove the ink that the eraser path a-b covers.
- * Returns null if nothing changes, or the remaining pieces (maybe none).
+ * The part of segment s->e that lies inside the eraser capsule (path a-b, radius r).
+ * A capsule is convex, so the answer is a single span of t, or null.
+ */
+export function capsuleSpan(sx: number, sy: number, ex: number, ey: number, a: Pt, b: Pt, r: number): Span | null {
+  const dx = ex - sx, dy = ey - sy;
+  const spans: Span[] = [];
+  const da = discSpan(sx, sy, dx, dy, a, r);
+  if (da) spans.push(da);
+  const L = Math.hypot(b.x - a.x, b.y - a.y);
+  if (L > 0) {
+    const db = discSpan(sx, sy, dx, dy, b, r);
+    if (db) spans.push(db);
+    // The strip between the two end discs, in the capsule's own axes.
+    const ux = (b.x - a.x) / L, uy = (b.y - a.y) / L;
+    const span: Span = [0, 1];
+    const u0 = (sx - a.x) * ux + (sy - a.y) * uy, du = dx * ux + dy * uy;
+    const v0 = -(sx - a.x) * uy + (sy - a.y) * ux, dv = -dx * uy + dy * ux;
+    if (clip(span, u0, du, 0, L) && clip(span, v0, dv, -r, r)) spans.push(span);
+  }
+  if (!spans.length) return null;
+  const t0 = Math.min(...spans.map(x => x[0])), t1 = Math.max(...spans.map(x => x[1]));
+  return t1 - t0 > 1e-9 ? [t0, t1] : null;
+}
+
+/**
+ * Subtract the eraser capsule from a stroke's centerline.
+ *
+ * Returns null if nothing changes, or the pieces that remain (maybe none), each
+ * an exact polyline. Points outside the eraser are copied untouched, and a cut
+ * lands exactly where the line crosses the eraser edge, so nothing else moves.
+ * `poly` says the points are already a polyline and must not be smoothed.
  */
 export function eraseSegment(
-  points: Float32Array, size: number, a: Pt, b: Pt, radius: number, tol: number,
+  points: Float32Array, size: number, a: Pt, b: Pt, radius: number, poly = false,
 ): Float32Array[] | null {
   if (!strokeTouches(points, size, a, b, radius)) return null;
-  const reach2 = (radius + size / 2) ** 2;
-  const flat = flatten(points, tol);
+  const R = radius + size / 2;
+  const line = centerline(points, poly);
+  const n = line.length / 2;
+
+  if (n === 1) {
+    return distToSegmentSq(line[0], line[1], a.x, a.y, b.x, b.y) <= R * R ? [] : null;
+  }
+
   const pieces: Float32Array[] = [];
   let run: number[] = [];
-  let erasedAny = false;
+  let cut = false;
   const flush = () => {
-    if (run.length) pieces.push(simplify(toPoints(run), tol * 0.25));
+    if (run.length >= 4) pieces.push(toPoints(run));
     run = [];
   };
-  for (let i = 0; i < flat.length; i += 2) {
-    if (distToSegmentSq(flat[i], flat[i + 1], a.x, a.y, b.x, b.y) <= reach2) {
-      erasedAny = true;
-      flush();
-    } else {
-      run.push(flat[i], flat[i + 1]);
+
+  for (let i = 0; i < n - 1; i++) {
+    const sx = line[2 * i], sy = line[2 * i + 1], ex = line[2 * i + 2], ey = line[2 * i + 3];
+    const span = capsuleSpan(sx, sy, ex, ey, a, b, R);
+    if (!span) {
+      if (!run.length) run.push(sx, sy);
+      run.push(ex, ey);
+      continue;
     }
+    cut = true;
+    const [t0, t1] = span;
+    if (t0 > 0) {
+      if (!run.length) run.push(sx, sy);
+      run.push(sx + (ex - sx) * t0, sy + (ey - sy) * t0);
+    }
+    flush();
+    if (t1 < 1) run = [sx + (ex - sx) * t1, sy + (ey - sy) * t1, ex, ey];
   }
   flush();
-  return erasedAny ? pieces : null;
+  return cut ? pieces : null;
 }

@@ -11,6 +11,8 @@ export type Stroke = {
   points: Float32Array;
   bbox: BBox;
   createdAt: number;
+  /** Set when the eraser has cut this stroke: the points are an exact polyline, drawn without smoothing. */
+  poly?: boolean;
 };
 
 /**

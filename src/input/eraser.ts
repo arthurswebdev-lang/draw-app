@@ -41,7 +41,6 @@ export function attachEraser(opts: {
     const s = getSettings();
     const zoom = renderer.camera.zoom;
     const radius = s.eraserSize / 2 / zoom;
-    const tol = 1 / zoom;
     const sweep = {
       minX: Math.min(a.x, b.x) - radius, maxX: Math.max(a.x, b.x) + radius,
       minY: Math.min(a.y, b.y) - radius, maxY: Math.max(a.y, b.y) + radius,
@@ -54,13 +53,13 @@ export function attachEraser(opts: {
       if (s.tool === 'stroke-eraser') {
         if (strokeTouches(st.points, st.size, a, b, radius)) remove.push(st);
       } else {
-        const pieces = eraseSegment(st.points, st.size, a, b, radius, tol);
+        const pieces = eraseSegment(st.points, st.size, a, b, radius, st.poly);
         if (!pieces) continue;
         remove.push(st);
         for (const p of pieces) {
           add.push({
             id: crypto.randomUUID(), color: st.color, size: st.size,
-            points: p, bbox: computeBBox(p, st.size), createdAt: st.createdAt,
+            points: p, bbox: computeBBox(p, st.size), createdAt: st.createdAt, poly: true,
           });
         }
       }

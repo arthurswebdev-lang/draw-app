@@ -1,6 +1,6 @@
 import { Camera, IconItem, isIcon, Item, Stroke, STRIDE } from '../types';
 import { intersects } from '../geometry/bbox';
-import { smooth, toPath2D } from '../geometry/smooth';
+import { polyline, smooth, toPath2D } from '../geometry/smooth';
 import { iconDef } from '../icons/library';
 import { hitIcon, iconHandles } from '../geometry/icon';
 
@@ -95,7 +95,7 @@ export class Renderer {
   private pathFor(s: Stroke): Path2D {
     let p = this.cache.get(s.id);
     if (!p) {
-      p = toPath2D(smooth(s.points), s.size);
+      p = toPath2D(s.poly ? polyline(s.points) : smooth(s.points), s.size);
       this.cache.set(s.id, p);
     }
     return p;

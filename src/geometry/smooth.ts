@@ -26,6 +26,16 @@ export function smooth(points: Float32Array): PathCmd[] {
   return cmds;
 }
 
+/** Straight segments through every point: for strokes that were cut and must not move. */
+export function polyline(points: Float32Array): PathCmd[] {
+  const n = points.length / STRIDE;
+  if (n === 0) return [];
+  if (n === 1) return [{ t: 'dot', x: points[0], y: points[1] }];
+  const cmds: PathCmd[] = [{ t: 'M', x: points[0], y: points[1] }];
+  for (let i = 1; i < n; i++) cmds.push({ t: 'L', x: points[i * STRIDE], y: points[i * STRIDE + 1] });
+  return cmds;
+}
+
 export function toPath2D(cmds: PathCmd[], size: number): Path2D {
   const p = new Path2D();
   for (const c of cmds) {
