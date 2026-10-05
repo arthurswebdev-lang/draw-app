@@ -5,9 +5,13 @@ import { createSurface } from './render/surface';
 import { updateGrid } from './render/grid';
 import { attachPen } from './input/pen';
 import { attachNavigate } from './input/navigate';
+import { attachEraser } from './input/eraser';
+import { attachSelect } from './input/select';
 import { createToolbar } from './ui/toolbar';
+import { createIconsPanel } from './ui/icons-panel';
 import { History } from './state/history';
-import { Camera, PenSettings, Stroke } from './types';
+import { screenToWorld } from './camera';
+import { Camera, Change, Tool, ToolSettings } from './types';
 
 async function main() {
   const board = document.getElementById('board')!;
@@ -17,14 +21,14 @@ async function main() {
     document.getElementById('live') as HTMLCanvasElement,
   );
   const history = new History();
-  const pen: PenSettings = { color: '#1e1e1e', size: 4 };
+  const settings: ToolSettings = { tool: 'pen', color: '#1e1e1e', size: 4, eraserSize: 24 };
 
   const store = await createStore();
   const savedCam = await store.getMeta<Camera>('camera');
-  const savedPen = await store.getMeta<PenSettings>('pen');
+  const savedSettings = await store.getMeta<ToolSettings>('pen');
   if (savedCam) renderer.camera = savedCam;
-  if (savedPen) Object.assign(pen, savedPen);
-  renderer.setStrokes(await store.getAllStrokes());
+  if (savedSettings) Object.assign(settings, savedSettings);
+  renderer.setItems(await store.getAllItems());
   navigator.storage?.persist?.().catch(() => {});
 
   const guard = (p: Promise<unknown>) =>
@@ -34,17 +38,40 @@ async function main() {
   const saveMeta = () => {
     clearTimeout(metaTimer);
     metaTimer = window.setTimeout(() => {
-      guard(Promise.all([store.setMeta('camera', renderer.camera), store.setMeta('pen', { ...pen })]));
+      guard(Promise.all([store.setMeta('camera', renderer.camera), store.setMeta('pen', { ...settings })]));
     }, 300);
   };
 
   const toolbar = createToolbar(document.getElementById('toolbar')!, {
-    pen,
-    onPenChange: saveMeta,
+    settings,
+    onChange: () => { applyTool(); saveMeta(); },
     onUndo: () => undo(),
     onRedo: () => redo(),
     onZoomReset: () => setCamera({ ...renderer.camera, zoom: 1 }),
+    onIcons: () => { toolbar.setIconsOpen(panel.toggle()); },
   });
+
+  const panel = createIconsPanel(document.getElementById('icons-panel')!, {
+    getColor: () => settings.color,
+    onPick: kind => {
+      // Placed at the middle of what is on screen and already selected, so the
+      // next drag moves it. Tapping a tile and then having to aim at the board
+      // is one gesture too many on a phone.
+      const mid = screenToWorld(renderer.camera, window.innerWidth / 2, window.innerHeight / 2);
+      setTool('select');
+      select.place(kind, mid.x, mid.y);
+    },
+  });
+  let eraser: ReturnType<typeof attachEraser> | undefined;
+  const applyTool = () => {
+    document.body.dataset.tool = settings.tool;
+    eraser?.refresh();
+    // Leaving the select tool drops the handles: they would otherwise sit over
+    // the drawing offering a grab that no longer does anything.
+    if (settings.tool !== 'select') select?.clear();
+    panel.refresh();
+  };
+  applyTool();
   const refreshHistory = () => toolbar.setHistory(history.canUndo, history.canRedo);
 
   const setCamera = (c: Camera) => {
@@ -63,39 +90,56 @@ async function main() {
   toolbar.setZoom(renderer.camera.zoom);
 
   const nav = attachNavigate({ board, getCamera: () => renderer.camera, setCamera });
-  attachPen({
+  const commit = (c: Change) => {
+    history.push(c);
+    refreshHistory();
+    guard(store.applyChange(c.removed, c.added));
+  };
+  attachPen({ board, renderer, getSettings: () => settings, isNavigating: nav.isNavigating, onCommit: commit });
+  eraser = attachEraser({ board, renderer, getSettings: () => settings, isNavigating: nav.isNavigating, onCommit: commit });
+  const select = attachSelect({
     board, renderer,
-    getPen: () => pen,
+    getSettings: () => settings,
     isNavigating: nav.isNavigating,
-    onCommit: (s: Stroke) => {
-      history.push(s);
-      refreshHistory();
-      guard(store.addStroke(s));
-    },
+    onCommit: commit,
+    onSelect: () => {},
   });
 
   function undo() {
-    const s = history.undo();
-    if (!s) return;
-    renderer.removeStroke(s.id);
-    guard(store.deleteStroke(s.id));
+    const c = history.undo();
+    if (!c) return;
+    renderer.applyChange(c.added, c.removed);
+    guard(store.applyChange(c.added, c.removed));
     refreshHistory();
   }
   function redo() {
-    const s = history.redo();
-    if (!s) return;
-    renderer.addStroke(s);
-    guard(store.addStroke(s));
+    const c = history.redo();
+    if (!c) return;
+    renderer.applyChange(c.removed, c.added);
+    guard(store.applyChange(c.removed, c.added));
     refreshHistory();
   }
+
+  const setTool = (t: Tool) => { settings.tool = t; toolbar.sync(); applyTool(); saveMeta(); };
 
   window.addEventListener('keydown', e => {
     if (e.target instanceof HTMLInputElement && e.target.type === 'text') return;
     const mod = e.metaKey || e.ctrlKey;
     if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
     else if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
-    else if (e.key === '[') { pen.size = Math.max(1, pen.size - 1); toolbar.sync(); saveMeta(); }
-    else if (e.key === ']') { pen.size = Math.min(40, pen.size + 1); toolbar.sync(); saveMeta(); }
+    else if (!mod && e.key.toLowerCase() === 'p') setTool('pen');
+    else if (!mod && e.key.toLowerCase() === 'e') setTool('eraser');
+    else if (!mod && e.key.toLowerCase() === 'x') setTool('stroke-eraser');
+    else if (!mod && e.key.toLowerCase() === 'v') setTool('select');
+    else if (!mod && e.key.toLowerCase() === 'i') { toolbar.setIconsOpen(panel.toggle()); }
+    else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); select.deleteSelected(); }
+    else if (e.key === 'Escape') select.clear();
+    else if (e.key === '[' || e.key === ']') {
+      const d = e.key === '[' ? -1 : 1;
+      if (settings.tool === 'pen') settings.size = Math.min(40, Math.max(1, settings.size + d));
+      else settings.eraserSize = Math.min(120, Math.max(4, settings.eraserSize + d * 2));
+      toolbar.sync(); saveMeta(); eraser?.refresh();
+    }
   });
 
   refreshHistory();

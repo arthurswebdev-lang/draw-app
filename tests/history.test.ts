@@ -1,19 +1,19 @@
 import { describe, it, expect } from 'vitest';
 import { History } from '../src/state/history';
-import { Stroke } from '../src/types';
+import { Change, Stroke } from '../src/types';
 
-const s = (id: string) => ({ id } as Stroke);
+const add = (id: string): Change => ({ removed: [], added: [{ id } as Stroke] });
 
 describe('history', () => {
   it('undo, redo, and new push clears redo', () => {
     const h = new History();
-    h.push(s('a')); h.push(s('b'));
-    expect(h.undo()?.id).toBe('b');
+    h.push(add('a')); h.push(add('b'));
+    expect(h.undo()?.added[0].id).toBe('b');
     expect(h.canRedo).toBe(true);
-    expect(h.redo()?.id).toBe('b');
+    expect(h.redo()?.added[0].id).toBe('b');
     h.undo();
-    h.push(s('c'));
+    h.push(add('c'));
     expect(h.canRedo).toBe(false);
-    expect(h.undo()?.id).toBe('c');
+    expect(h.undo()?.added[0].id).toBe('c');
   });
 });

@@ -1,17 +1,17 @@
 import { Renderer } from '../render/strokes';
 import { screenToWorld } from '../camera';
-import { PenSettings, Stroke, STRIDE } from '../types';
+import { Change, ToolSettings, Stroke, STRIDE } from '../types';
 import { simplify } from '../geometry/simplify';
 import { computeBBox } from '../geometry/bbox';
 
 export function attachPen(opts: {
   board: HTMLElement;
   renderer: Renderer;
-  getPen: () => PenSettings;
+  getSettings: () => ToolSettings;
   isNavigating: () => boolean;
-  onCommit: (s: Stroke) => void;
+  onCommit: (c: Change) => void;
 }) {
-  const { board, renderer, getPen, isNavigating, onCommit } = opts;
+  const { board, renderer, getSettings, isNavigating, onCommit } = opts;
   let activeId: number | null = null;
   let pts: number[] = [];
   let color = '#000';
@@ -29,10 +29,10 @@ export function attachPen(opts: {
   };
 
   board.addEventListener('pointerdown', e => {
-    if (e.button !== 0 || activeId !== null || isNavigating()) return;
+    if (e.button !== 0 || activeId !== null || isNavigating() || getSettings().tool !== 'pen') return;
     activeId = e.pointerId;
     board.setPointerCapture(e.pointerId);
-    const pen = getPen();
+    const pen = getSettings();
     color = pen.color;
     size = pen.size / renderer.camera.zoom;
     pts = [];
@@ -60,9 +60,9 @@ export function attachPen(opts: {
       createdAt: Date.now(),
     };
     pts = [];
-    renderer.addStroke(stroke);
+    renderer.applyChange([], [stroke]);
     renderer.setLive(null);
-    onCommit(stroke);
+    onCommit({ removed: [], added: [stroke] });
   };
   board.addEventListener('pointerup', end);
   board.addEventListener('pointercancel', end);

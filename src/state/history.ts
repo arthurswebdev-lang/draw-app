@@ -1,22 +1,22 @@
-import { Stroke } from '../types';
+import { Change } from '../types';
 
 export class History {
-  private undoStack: Stroke[] = [];
-  private redoStack: Stroke[] = [];
+  private undoStack: Change[] = [];
+  private redoStack: Change[] = [];
 
-  push(stroke: Stroke) {
-    this.undoStack.push(stroke);
+  push(change: Change) {
+    this.undoStack.push(change);
     this.redoStack = [];
   }
-  undo(): Stroke | undefined {
-    const s = this.undoStack.pop();
-    if (s) this.redoStack.push(s);
-    return s;
+  undo(): Change | undefined {
+    const c = this.undoStack.pop();
+    if (c) this.redoStack.push(c);
+    return c;
   }
-  redo(): Stroke | undefined {
-    const s = this.redoStack.pop();
-    if (s) this.undoStack.push(s);
-    return s;
+  redo(): Change | undefined {
+    const c = this.redoStack.pop();
+    if (c) this.undoStack.push(c);
+    return c;
   }
   get canUndo() { return this.undoStack.length > 0; }
   get canRedo() { return this.redoStack.length > 0; }
