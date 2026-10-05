@@ -59,10 +59,12 @@ async function main() {
       // is one gesture too many on a phone.
       const mid = screenToWorld(renderer.camera, window.innerWidth / 2, window.innerHeight / 2);
       setTool('select');
-      select.place(kind, mid.x, mid.y);
+      select?.place(kind, mid.x, mid.y);
     },
   });
+  // Declared before applyTool() first runs; assigned once the board is wired up.
   let eraser: ReturnType<typeof attachEraser> | undefined;
+  let select: ReturnType<typeof attachSelect> | undefined;
   const applyTool = () => {
     document.body.dataset.tool = settings.tool;
     eraser?.refresh();
@@ -97,7 +99,7 @@ async function main() {
   };
   attachPen({ board, renderer, getSettings: () => settings, isNavigating: nav.isNavigating, onCommit: commit });
   eraser = attachEraser({ board, renderer, getSettings: () => settings, isNavigating: nav.isNavigating, onCommit: commit });
-  const select = attachSelect({
+  select = attachSelect({
     board, renderer,
     getSettings: () => settings,
     isNavigating: nav.isNavigating,
@@ -132,8 +134,8 @@ async function main() {
     else if (!mod && e.key.toLowerCase() === 'x') setTool('stroke-eraser');
     else if (!mod && e.key.toLowerCase() === 'v') setTool('select');
     else if (!mod && e.key.toLowerCase() === 'i') { toolbar.setIconsOpen(panel.toggle()); }
-    else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); select.deleteSelected(); }
-    else if (e.key === 'Escape') select.clear();
+    else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); select?.deleteSelected(); }
+    else if (e.key === 'Escape') select?.clear();
     else if (e.key === '[' || e.key === ']') {
       const d = e.key === '[' ? -1 : 1;
       if (settings.tool === 'pen') settings.size = Math.min(40, Math.max(1, settings.size + d));

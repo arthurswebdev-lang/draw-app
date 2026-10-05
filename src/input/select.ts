@@ -131,6 +131,9 @@ export function attachSelect(opts: {
         createdAt: Date.now(),
       };
       icon.bbox = iconBBox(icon);
+      // The board must hold the icon before it is selected, or it is neither
+      // drawn nor findable by the next tap.
+      renderer.applyChange([], [icon]);
       opts.onCommit({ removed: [], added: [icon] });
       renderer.select(icon);
       opts.onSelect(icon);
@@ -142,6 +145,7 @@ export function attachSelect(opts: {
       const i = renderer.selection;
       if (!i) return;
       renderer.select(null);
+      renderer.applyChange([i], []);
       opts.onSelect(null);
       opts.onCommit({ removed: [i], added: [] });
     },
