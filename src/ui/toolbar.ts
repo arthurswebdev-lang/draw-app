@@ -10,9 +10,13 @@ const ICONS: Record<Tool, string> = {
 };
 const TITLES: Record<Tool, string> = {
   pen: 'Pen (P)',
-  eraser: 'Eraser: erase parts of strokes (E)',
-  'stroke-eraser': 'Stroke eraser: delete whole strokes it touches (X)',
+  eraser: 'Eraser: rubs out the part you touch (E)',
+  'stroke-eraser': 'Object eraser: deletes a whole line or icon at once (X)',
   select: 'Select: move, resize and turn an icon (V)',
+};
+// Under each tool, because a finger has no tooltip to read.
+const CAPTIONS: Record<Tool, string> = {
+  pen: 'Pen', eraser: 'Eraser', 'stroke-eraser': 'Object', select: 'Select',
 };
 
 export function createToolbar(el: HTMLElement, opts: {
@@ -31,7 +35,7 @@ export function createToolbar(el: HTMLElement, opts: {
     <div class="grp tools"></div>
     <div class="grp colors">
       <div class="swatches"></div>
-      <input type="color" id="color" title="Custom color" />
+      <label class="colorwell" title="Custom color"><input type="color" id="color" /></label>
     </div>
     <div class="grp sizing">
       <input type="range" id="size" title="Size ([ and ])" />
@@ -59,7 +63,7 @@ export function createToolbar(el: HTMLElement, opts: {
     b.className = 'tool';
     b.dataset.tool = t;
     b.title = TITLES[t];
-    b.innerHTML = ICONS[t];
+    b.innerHTML = `${ICONS[t]}<span class="cap">${CAPTIONS[t]}</span>`;
     b.onclick = () => { settings.tool = t; sync(); opts.onChange(); };
     toolBox.appendChild(b);
   }
@@ -103,6 +107,7 @@ export function createToolbar(el: HTMLElement, opts: {
     const pen = !isEraser();
     icons.classList.toggle('active', settings.tool === 'select');
     color.value = /^#[0-9a-f]{6}$/i.test(settings.color) ? settings.color : '#000000';
+    color.parentElement!.style.setProperty('--c', settings.color);
     size.min = pen ? '1' : '4';
     size.max = pen ? '40' : '120';
     size.value = String(pen ? settings.size : settings.eraserSize);

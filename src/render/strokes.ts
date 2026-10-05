@@ -87,6 +87,38 @@ export class Renderer {
     ctx.restore();
   }
 
+  /**
+   * Does an eraser sweeping from a to b (a disc of `radius`) touch the icon's
+   * drawn outline? Uses the real paths, not the box, so an eraser passing through
+   * the empty middle of a lamp, or close beside it, leaves it alone.
+   *
+   * The icon's outline is stroked fat enough to reach the eraser's edge, then the
+   * eraser's centre line is sampled against it. The samples are closer together
+   * than the fat stroke is wide, so a thin crossing cannot slip between two.
+   */
+  iconTouches(i: IconItem, a: { x: number; y: number }, b: { x: number; y: number }, radius: number): boolean {
+    const paths = this.iconPaths(i.kind);
+    if (!paths) return false;
+    const ctx = (this.hitCtx ??= document.createElement('canvas').getContext('2d')!);
+    const k = i.box / 100;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.translate(i.x, i.y);
+    ctx.rotate(i.rotation);
+    ctx.scale(k, k);
+    ctx.translate(-50, -50);
+    ctx.lineWidth = (2 * radius + i.size) / k;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    const steps = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / Math.max(radius * 0.5, 1e-3)));
+    for (let n = 0; n <= steps; n++) {
+      const x = a.x + ((b.x - a.x) * n) / steps, y = a.y + ((b.y - a.y) * n) / steps;
+      for (const p of paths) if (ctx.isPointInStroke(p, x, y)) return true;
+    }
+    return false;
+  }
+
+  private hitCtx?: CanvasRenderingContext2D;
+
   private drawItem(ctx: CanvasRenderingContext2D, i: Item) {
     if (isIcon(i)) this.drawIcon(ctx, i);
     else this.drawStroke(ctx, i, this.pathFor(i));

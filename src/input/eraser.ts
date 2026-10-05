@@ -1,6 +1,6 @@
 import { Renderer } from '../render/strokes';
 import { screenToWorld } from '../camera';
-import { Change, Stroke, ToolSettings } from '../types';
+import { Change, Item, Stroke, ToolSettings } from '../types';
 import { computeBBox } from '../geometry/bbox';
 import { eraseSegment, Pt, strokeTouches } from '../geometry/erase';
 
@@ -31,7 +31,7 @@ export function attachEraser(opts: {
   // added: pieces created during this gesture and still present.
   let session: {
     id: number; last: Pt;
-    originals: Map<string, Stroke>;
+    originals: Map<string, Item>;
     added: Map<string, Stroke>;
   } | null = null;
 
@@ -45,7 +45,7 @@ export function attachEraser(opts: {
       minX: Math.min(a.x, b.x) - radius, maxX: Math.max(a.x, b.x) + radius,
       minY: Math.min(a.y, b.y) - radius, maxY: Math.max(a.y, b.y) + radius,
     };
-    const remove: Stroke[] = [];
+    const remove: Item[] = [];
     const add: Stroke[] = [];
     for (const st of renderer.strokes) {
       const bb = st.bbox;
@@ -63,6 +63,13 @@ export function attachEraser(opts: {
           });
         }
       }
+    }
+    // An icon is one object: either eraser takes the whole thing if it touches
+    // the drawn outline. (Cutting a piece out of an icon would leave a broken one.)
+    for (const ic of renderer.icons) {
+      const bb = ic.bbox;
+      if (bb.maxX < sweep.minX || bb.minX > sweep.maxX || bb.maxY < sweep.minY || bb.minY > sweep.maxY) continue;
+      if (renderer.iconTouches(ic, a, b, radius)) remove.push(ic);
     }
     if (!remove.length && !add.length) return;
     for (const r of remove) {
