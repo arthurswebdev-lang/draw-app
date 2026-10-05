@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#f4f4f5"/>
+  <g fill="#c4c4c8">
+    <circle cx="96" cy="96" r="5"/><circle cx="192" cy="96" r="5"/><circle cx="288" cy="96" r="5"/><circle cx="384" cy="96" r="5"/><circle cx="480" cy="96" r="5"/>
+    <circle cx="96" cy="192" r="5"/><circle cx="192" cy="192" r="5"/><circle cx="288" cy="192" r="5"/><circle cx="384" cy="192" r="5"/><circle cx="480" cy="192" r="5"/>
+    <circle cx="96" cy="288" r="5"/><circle cx="192" cy="288" r="5"/><circle cx="288" cy="288" r="5"/><circle cx="384" cy="288" r="5"/><circle cx="480" cy="288" r="5"/>
+    <circle cx="96" cy="384" r="5"/><circle cx="192" cy="384" r="5"/><circle cx="288" cy="384" r="5"/><circle cx="384" cy="384" r="5"/><circle cx="480" cy="384" r="5"/>
+    <circle cx="96" cy="480" r="5"/><circle cx="192" cy="480" r="5"/><circle cx="288" cy="480" r="5"/><circle cx="384" cy="480" r="5"/><circle cx="480" cy="480" r="5"/>
+  </g>
+  <path d="M110 350 C 150 160, 230 160, 256 270 C 282 380, 360 390, 405 170" fill="none" stroke="#1971c2" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
