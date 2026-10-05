@@ -11,6 +11,7 @@ export function createIconsPanel(el: HTMLElement, opts: {
   getColor: () => string;
   onPick: (kind: string) => void;
 }) {
+  let armedKind: string | null = null;
   let sphere = SPHERES[0].id;
   let group = SPHERES[0].groups[0];
 
@@ -64,6 +65,7 @@ export function createIconsPanel(el: HTMLElement, opts: {
       const b = document.createElement('button');
       b.className = 'panel__icon';
       b.title = def.label;
+      b.classList.toggle('armed', def.id === armedKind);
       b.innerHTML = `<svg viewBox="-6 -6 112 112" fill="none" stroke="${color}"
         stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
         ${def.d.map(d => `<path d="${d}"/>`).join('')}
@@ -77,8 +79,16 @@ export function createIconsPanel(el: HTMLElement, opts: {
   render();
 
   return {
+    /** Marks the tile that will be dropped on the board next. */
+    setArmed(kind: string | null) {
+      armedKind = kind;
+      grid.querySelectorAll<HTMLElement>('.panel__icon').forEach((b, i) => {
+        b.classList.toggle('armed', iconsIn(sphere, group)[i]?.id === kind);
+      });
+    },
     /** Redraws the tiles in the current colour. */
     refresh: render,
+    close() { el.hidden = true; },
     toggle() {
       el.hidden = !el.hidden;
       if (!el.hidden) render();

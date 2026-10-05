@@ -67,5 +67,12 @@ export function attachPen(opts: {
   board.addEventListener('pointerup', end);
   board.addEventListener('pointercancel', end);
   board.addEventListener('lostpointercapture', end);
+  // A second finger means pinch or pan, not a mark: throw the stroke away.
+  board.addEventListener('abort-gesture', () => {
+    if (activeId === null) return;
+    activeId = null;
+    pts = [];
+    renderer.setLive(null);
+  });
   board.addEventListener('contextmenu', e => e.preventDefault());
 }

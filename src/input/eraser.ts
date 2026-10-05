@@ -95,8 +95,8 @@ export function attachEraser(opts: {
     }
   });
 
-  const end = (e: PointerEvent) => {
-    if (!session || e.pointerId !== session.id) return;
+  const finish = () => {
+    if (!session) return;
     const change: Change = {
       removed: [...session.originals.values()],
       added: [...session.added.values()],
@@ -104,6 +104,11 @@ export function attachEraser(opts: {
     session = null;
     if (change.removed.length || change.added.length) onCommit(change);
   };
+  const end = (e: PointerEvent) => {
+    if (session && e.pointerId === session.id) finish();
+  };
+  // A second finger starts a pinch: keep what was erased so far and stop.
+  board.addEventListener('abort-gesture', finish);
   board.addEventListener('pointerup', end);
   board.addEventListener('pointercancel', end);
   board.addEventListener('lostpointercapture', end);

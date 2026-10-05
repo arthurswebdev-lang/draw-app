@@ -22,23 +22,27 @@ export function createToolbar(el: HTMLElement, opts: {
   onRedo: () => void;
   onZoomReset: () => void;
   onIcons: () => void;
+  /** The colour or line size was picked: restyle the selected icon, if any. */
+  onRestyle?: (patch: { color?: string; size?: number }) => void;
 }) {
   const { settings } = opts;
+  // Four groups. When the bar is too narrow it wraps between groups, never inside one.
   el.innerHTML = `
-    <div class="tools"></div>
-    <span class="sep"></span>
-    <div class="swatches"></div>
-    <input type="color" id="color" title="Custom color" />
-    <span class="sep"></span>
-    <input type="range" id="size" title="Size ([ and ])" />
-    <span class="preview"><i id="dot"></i></span>
-    <span class="sep"></span>
-    <button id="icons" title="Icon library (I)">Icons</button>
-    <span class="sep"></span>
-    <button id="undo" title="Undo (Cmd/Ctrl+Z)">↶</button>
-    <button id="redo" title="Redo (Shift+Cmd/Ctrl+Z)">↷</button>
-    <span class="sep"></span>
-    <button id="zoom" title="Reset zoom">100%</button>`;
+    <div class="grp tools"></div>
+    <div class="grp colors">
+      <div class="swatches"></div>
+      <input type="color" id="color" title="Custom color" />
+    </div>
+    <div class="grp sizing">
+      <input type="range" id="size" title="Size ([ and ])" />
+      <span class="preview"><i id="dot"></i></span>
+    </div>
+    <div class="grp actions">
+      <button id="icons" title="Icon library (I)">Icons</button>
+      <button id="undo" title="Undo (Cmd/Ctrl+Z)" aria-label="Undo">↶</button>
+      <button id="redo" title="Redo (Shift+Cmd/Ctrl+Z)" aria-label="Redo">↷</button>
+      <button id="zoom" title="Reset zoom">100%</button>
+    </div>`;
   const q = <T extends HTMLElement>(s: string) => el.querySelector<T>(s)!;
   const toolBox = q('.tools');
   const swatchBox = q('.swatches');
@@ -65,14 +69,30 @@ export function createToolbar(el: HTMLElement, opts: {
     b.dataset.color = c;
     b.style.background = c;
     b.title = c;
-    b.onclick = () => { settings.color = c; settings.tool = 'pen'; sync(); opts.onChange(); };
+    b.onclick = () => { pickColor(c); };
     swatchBox.appendChild(b);
   }
-  color.oninput = () => { settings.color = color.value; settings.tool = 'pen'; sync(); opts.onChange(); };
+  const isEraser = () => settings.tool === 'eraser' || settings.tool === 'stroke-eraser';
+
+  /**
+   * The colours stay live whatever the tool. Picking one with an eraser in hand
+   * means you want to draw, so it hands you the pen; with an icon selected it
+   * recolours that icon and leaves the select tool alone.
+   */
+  function pickColor(c: string) {
+    settings.color = c;
+    if (isEraser()) settings.tool = 'pen';
+    sync();
+    opts.onChange();
+    opts.onRestyle?.({ color: c });
+  }
+
+  color.oninput = () => pickColor(color.value);
   size.oninput = () => {
     const v = Number(size.value);
-    if (settings.tool === 'pen') settings.size = v; else settings.eraserSize = v;
+    if (isEraser()) settings.eraserSize = v; else settings.size = v;
     sync(); opts.onChange();
+    if (!isEraser()) opts.onRestyle?.({ size: v });
   };
   icons.onclick = opts.onIcons;
   undo.onclick = opts.onUndo;
@@ -80,7 +100,7 @@ export function createToolbar(el: HTMLElement, opts: {
   zoom.onclick = opts.onZoomReset;
 
   function sync() {
-    const pen = settings.tool === 'pen';
+    const pen = !isEraser();
     icons.classList.toggle('active', settings.tool === 'select');
     color.value = /^#[0-9a-f]{6}$/i.test(settings.color) ? settings.color : '#000000';
     size.min = pen ? '1' : '4';
@@ -91,11 +111,9 @@ export function createToolbar(el: HTMLElement, opts: {
     dot.style.background = pen ? settings.color : 'transparent';
     dot.style.border = pen ? 'none' : '1.5px solid #495057';
     swatchBox.querySelectorAll<HTMLElement>('.swatch').forEach(b =>
-      b.classList.toggle('active', pen && b.dataset.color === settings.color));
+      b.classList.toggle('active', b.dataset.color === settings.color));
     toolBox.querySelectorAll<HTMLElement>('.tool').forEach(b =>
       b.classList.toggle('active', b.dataset.tool === settings.tool));
-    swatchBox.classList.toggle('dim', !pen);
-    color.classList.toggle('dim', !pen);
   }
   sync();
 

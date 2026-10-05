@@ -154,7 +154,8 @@ export class Renderer {
     ctx.lineTo(rotate.x, rotate.y);
     ctx.stroke();
 
-    const r = 5 / z;
+    // Bigger handles for a finger than for a mouse.
+    const r = (window.matchMedia('(pointer: coarse)').matches ? 9 : 5) / z;
     for (const c of corners) {
       ctx.beginPath();
       ctx.rect(c.x - r, c.y - r, r * 2, r * 2);

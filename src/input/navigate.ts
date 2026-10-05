@@ -1,6 +1,14 @@
 import { Camera } from '../types';
 import { panBy, zoomAt } from '../camera';
 
+/**
+ * Moving around the board: wheel, trackpad, space + drag, middle mouse, and on a
+ * touch screen two fingers to pan and pinch.
+ *
+ * It listens first (capture phase), so it can keep the drawing tools out of a
+ * gesture: it tells them to stop with an `abort-gesture` event and swallows the
+ * second finger and any palm that lands while a pencil is in use.
+ */
 export function attachNavigate(opts: {
   board: HTMLElement;
   getCamera: () => Camera;
@@ -30,6 +38,60 @@ export function attachNavigate(opts: {
     if (e.code === 'Space') { space = false; board.style.cursor = ''; }
   });
 
+  // Safari would otherwise zoom the whole page on a pinch.
+  for (const t of ['gesturestart', 'gesturechange', 'gestureend']) {
+    document.addEventListener(t, e => e.preventDefault());
+  }
+
+  // ---- touch: two fingers pan and zoom ----
+  const touches = new Map<number, { x: number; y: number }>();
+  let gesture: { cx: number; cy: number; dist: number } | null = null;
+  let penDown = 0;
+  const abort = () => board.dispatchEvent(new Event('abort-gesture'));
+
+  const pair = () => {
+    const [a, b] = [...touches.values()];
+    return { cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2, dist: Math.hypot(a.x - b.x, a.y - b.y) || 1 };
+  };
+
+  board.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'pen') {
+      penDown += 1;
+      // A palm that landed first may already be drawing. The pencil wins.
+      if (touches.size) { touches.clear(); gesture = null; abort(); }
+      return;
+    }
+    if (e.pointerType !== 'touch') return;
+    if (penDown > 0) { e.stopImmediatePropagation(); return; } // palm rejection
+    touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (touches.size >= 2) {
+      gesture = pair();
+      abort();
+      e.stopImmediatePropagation();
+    }
+  }, { capture: true });
+
+  board.addEventListener('pointermove', e => {
+    if (e.pointerType !== 'touch' || !touches.has(e.pointerId)) return;
+    touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (!gesture || touches.size < 2) return;
+    const now = pair();
+    let cam = panBy(getCamera(), now.cx - gesture.cx, now.cy - gesture.cy);
+    cam = zoomAt(cam, now.cx, now.cy, now.dist / gesture.dist);
+    setCamera(cam);
+    gesture = now;
+  }, { capture: true });
+
+  const lift = (e: PointerEvent) => {
+    if (e.pointerType === 'pen') penDown = Math.max(0, penDown - 1);
+    if (e.pointerType !== 'touch') return;
+    touches.delete(e.pointerId);
+    if (touches.size < 2) gesture = null;
+  };
+  board.addEventListener('pointerup', lift, { capture: true });
+  board.addEventListener('pointercancel', lift, { capture: true });
+
+  // ---- space + drag, middle mouse ----
   board.addEventListener('pointerdown', e => {
     if (e.button === 1 || (e.button === 0 && space)) {
       panning = { id: e.pointerId, x: e.clientX, y: e.clientY };
@@ -47,5 +109,5 @@ export function attachNavigate(opts: {
   board.addEventListener('pointerup', stop);
   board.addEventListener('pointercancel', stop);
 
-  return { isNavigating: () => space };
+  return { isNavigating: () => space || touches.size >= 2 };
 }

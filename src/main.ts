@@ -10,7 +10,7 @@ import { attachSelect } from './input/select';
 import { createToolbar } from './ui/toolbar';
 import { createIconsPanel } from './ui/icons-panel';
 import { History } from './state/history';
-import { screenToWorld } from './camera';
+import { iconDef } from './icons/library';
 import { Camera, Change, Tool, ToolSettings } from './types';
 
 async function main() {
@@ -49,19 +49,25 @@ async function main() {
     onRedo: () => redo(),
     onZoomReset: () => setCamera({ ...renderer.camera, zoom: 1 }),
     onIcons: () => { toolbar.setIconsOpen(panel.toggle()); },
+    // The colours and line size also restyle the selected icon.
+    onRestyle: patch => {
+      if (settings.tool !== 'select') return;
+      select?.restyle(patch.size === undefined ? patch : { size: patch.size / renderer.camera.zoom });
+    },
   });
 
   const panel = createIconsPanel(document.getElementById('icons-panel')!, {
     getColor: () => settings.color,
     onPick: kind => {
-      // Placed at the middle of what is on screen and already selected, so the
-      // next drag moves it. Tapping a tile and then having to aim at the board
-      // is one gesture too many on a phone.
-      const mid = screenToWorld(renderer.camera, window.innerWidth / 2, window.innerHeight / 2);
+      // Choosing a tile only arms the board: the icon lands where you press next,
+      // then stays selected so you can move, resize or turn it.
       setTool('select');
-      select?.place(kind, mid.x, mid.y);
+      select?.arm(kind);
+      // On a narrow screen the panel would cover the spot you want to tap.
+      if (window.innerWidth < 900) { panel.close(); toolbar.setIconsOpen(false); }
     },
   });
+  const hint = document.getElementById('hint')!;
   // Declared before applyTool() first runs; assigned once the board is wired up.
   let eraser: ReturnType<typeof attachEraser> | undefined;
   let select: ReturnType<typeof attachSelect> | undefined;
@@ -104,19 +110,42 @@ async function main() {
     getSettings: () => settings,
     isNavigating: nav.isNavigating,
     onCommit: commit,
-    onSelect: () => {},
+    onSelect: i => {
+      // Show the icon's own colour and line size in the toolbar, so touching
+      // either one edits what is selected rather than something unseen.
+      if (!i) return;
+      settings.color = i.color;
+      settings.size = Math.min(40, Math.max(1, Math.round(i.size * renderer.camera.zoom)));
+      toolbar.sync();
+    },
+    onArmChange: kind => {
+      panel.setArmed(kind);
+      document.body.dataset.armed = kind ? '1' : '';
+      hint.hidden = !kind;
+      if (kind) hint.textContent = `Tap the board to place: ${iconDef(kind)?.label ?? 'icon'}`;
+    },
   });
 
+  // Lets the icon panel sit just under the toolbar, however many rows it wraps to.
+  const toolbarEl = document.getElementById('toolbar')!;
+  new ResizeObserver(() => {
+    document.documentElement.style.setProperty('--toolbar-h', `${toolbarEl.offsetHeight}px`);
+  }).observe(toolbarEl);
+
   function undo() {
+    select?.flush();
     const c = history.undo();
     if (!c) return;
+    select?.clear();
     renderer.applyChange(c.added, c.removed);
     guard(store.applyChange(c.added, c.removed));
     refreshHistory();
   }
   function redo() {
+    select?.flush();
     const c = history.redo();
     if (!c) return;
+    select?.clear();
     renderer.applyChange(c.removed, c.added);
     guard(store.applyChange(c.removed, c.added));
     refreshHistory();
