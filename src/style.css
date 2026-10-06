@@ -51,7 +51,8 @@ body { position: fixed; inset: 0; -webkit-user-select: none; user-select: none; 
   content: ''; position: absolute; inset: 7px; border-radius: 50%;
   background: var(--c, #1e1e1e); box-shadow: 0 0 0 2px #fff; pointer-events: none;
 }
-#color { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; padding: 0; border: 0; cursor: pointer; }
+/* The native input is invisible and fills the wheel, so a tap anywhere on it opens the picker. */
+.colorwell input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; padding: 0; border: 0; cursor: pointer; }
 #size { width: 120px; flex: 0 0 auto; accent-color: #1971c2; }
 /* A fixed chip, so a 4 px pen reads as a dot in a box rather than a stray speck. */
 .preview { flex: 0 0 auto; width: 44px; height: 44px; border-radius: 12px; background: #f1f1f3; display: grid; place-items: center; }
@@ -103,7 +104,9 @@ body { position: fixed; inset: 0; -webkit-user-select: none; user-select: none; 
 #toolbar .magnetbtn.on { background: #d0ebff; color: #1971c2; box-shadow: inset 0 0 0 1.5px #1971c2; }
 #toolbar .magnetbtn.on .slash { display: none; }
 #toolbar .magnetbtn.on .pill { background: #1971c2; color: #fff; }
-.flyout.fills { gap: 8px; padding: 8px 10px; }
+.flyout.fills { gap: 8px; padding: 10px 12px; display: grid; grid-template-columns: repeat(5, auto); justify-content: center; align-items: center; width: max-content; max-width: min(340px, calc(100vw - 16px)); }
+/* Ringed when the fill is a custom colour rather than one of the swatches. */
+.colorwell.active { box-shadow: 0 0 0 2.5px #1971c2; }
 /* Pen colour menu: the swatches wrap, with the custom colour well after them. */
 .flyout.colorfly { gap: 10px; padding: 10px 12px; align-items: center; flex-wrap: wrap; justify-content: center; width: max-content; max-width: min(340px, calc(100vw - 16px)); }
 /* Two tidy rows of four. */
@@ -190,6 +193,7 @@ body[data-armed="1"] #board { cursor: copy; }
 
 /* A finger needs bigger targets than a mouse (Apple's guideline is 44 points). */
 @media (pointer: coarse) {
+  #toolbar .zorder button:not(.swatch) { height: 26px; min-width: 48px; }
   #toolbar { gap: 8px 16px; padding: 8px 12px; }
   #toolbar button:not(.swatch) { height: 44px; min-width: 44px; font-size: 17px; }
   #toolbar .tool, #toolbar .fillbtn { width: 62px; height: 54px; }
@@ -242,6 +246,13 @@ body[data-armed="1"] #board { cursor: copy; }
   .modal-actions:not(.stack) .m-cancel { order: -1; margin-right: auto; }
 }
 
+/* --- stacking arrows: forward / backward for the selected object ------------ */
+.zorder { display: flex; flex-direction: column; gap: 2px; flex: 0 0 auto; }
+#toolbar .zorder button:not(.swatch) {
+  height: 24px; min-width: 40px; padding: 0; display: grid; place-items: center; border-radius: 8px;
+}
+#toolbar .zorder svg { width: 18px; height: 18px; }
+
 /* --- the bars -------------------------------------------------------------- */
 /* On a tablet or desktop the two bars read as one: they take no box of their own
    and their groups flow together inside the toolbar. On a phone they become a top
@@ -268,6 +279,7 @@ body[data-armed="1"] #board { cursor: copy; }
   .bar-main { bottom: max(8px, env(safe-area-inset-bottom)); }
   .bar-aux { top: max(8px, env(safe-area-inset-top)); }
 
+  #toolbar .zorder button:not(.swatch) { height: 21px; min-width: 36px; }
   /* Icon-only buttons, so everything fits across a 375 px phone. */
   #toolbar .tool .cap { display: none; }
   #toolbar .tool, #toolbar .fillbtn { width: 44px; height: 44px; padding: 0; }

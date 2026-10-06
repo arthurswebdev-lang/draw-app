@@ -15,7 +15,8 @@ import { exportPng, lastBackground, PngBackground, rememberBackground, shareOrSa
 import { chooseBackground, confirmNew } from './ui/modal';
 import { History } from './state/history';
 import { iconDef } from './icons/library';
-import { Camera, Change, Tool, ToolSettings } from './types';
+import { Camera, Change, Selectable, Tool, ToolSettings } from './types';
+import { reorder } from './state/zorder';
 
 async function main() {
   const board = document.getElementById('board')!;
@@ -82,6 +83,7 @@ async function main() {
     onIcons: () => { toolbar.setIconsOpen(panel.toggle()); },
     onShare: () => { void shareFlow(true); },
     onNew: () => { void newFlow(); },
+    onZOrder: dir => zOrder(dir),
     // The colours and line size also restyle the selected icon.
     onRestyle: patch => {
       if (settings.tool !== 'select') return;
@@ -205,7 +207,7 @@ async function main() {
     onCommit: commit,
     // Selecting an icon deliberately leaves the toolbar alone: it must never
     // overwrite the colour or size you chose with those of an old icon.
-    onSelect: () => {},
+    onSelect: () => refreshZ(),
     onArmChange: kind => {
       panel.setArmed(kind);
       document.body.dataset.armed = kind ? '1' : '';
@@ -230,6 +232,26 @@ async function main() {
   window.addEventListener('resize', measure);
 
   shapes = attachShapes({ board, renderer, getSettings: () => settings, isNavigating: nav.isNavigating, onCommit: commit });
+
+  /** Enables the stacking arrows only when the selection has room to move that way. */
+  function refreshZ() {
+    const sel = renderer.selection;
+    const at = sel ? renderer.items.findIndex(i => i.id === sel.id) : -1;
+    toolbar.setZOrder(at !== -1 && at < renderer.items.length - 1, at > 0);
+  }
+
+  /** One step forward or backward for the selected object: one undoable change. */
+  function zOrder(dir: 1 | -1) {
+    select?.flush();
+    const sel = renderer.selection;
+    if (!sel) return;
+    const change = reorder(renderer.items, sel.id, dir);
+    if (!change) return;
+    renderer.applyChange(change.removed, change.added);
+    renderer.select(change.added[0] as Selectable); // stays selected, now the new copy
+    commit(change);
+    refreshZ();
+  }
 
   function undo() {
     select?.flush();
@@ -268,6 +290,7 @@ async function main() {
     else if (!mod && e.key.toLowerCase() === 'i') { toolbar.setIconsOpen(panel.toggle()); }
     else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); select?.deleteSelected(); }
     else if (e.key === 'Escape') select?.clear();
+    else if (mod && (e.key === '[' || e.key === ']')) { e.preventDefault(); zOrder(e.key === ']' ? 1 : -1); }
     else if (e.key === '[' || e.key === ']') {
       const d = e.key === '[' ? -1 : 1;
       if (isEraserTool(settings.tool)) settings.eraserSize = Math.min(120, Math.max(4, settings.eraserSize + d * 2));

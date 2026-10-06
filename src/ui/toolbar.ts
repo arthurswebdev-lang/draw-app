@@ -34,6 +34,9 @@ const CAPTIONS: Record<Tool, string> = {
 const MAGNET_ICON = svg('<path d="M6 3v10a6 6 0 0 0 12 0V3"/><path d="M6 8h4M14 8h4"/><path class="slash" d="M3 3l18 18"/>');
 const SHARE_ICON = svg('<path d="M12 15V3"/><path d="m7 8 5-5 5 5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/>');
 const NEW_ICON = svg('<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 11v6M9 14h6"/>');
+// Stacking order: the selected object moves one step in front of, or behind, its neighbour.
+const CHEVRON_UP = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m6 15 6-6 6 6"/></svg>';
+const CHEVRON_DOWN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
 const LIBRARY_ICON = svg('<rect x="3" y="3" width="7" height="7" rx="1"/><circle cx="17.5" cy="6.5" r="3.5"/><path d="M3 21l3.5-7L10 21z"/><rect x="14" y="14" width="7" height="7" rx="1"/>');
 
 /** A toolbar button that stands for several tools, and shows the one in use. */
@@ -52,6 +55,8 @@ export function createToolbar(el: HTMLElement, opts: {
   /** Zoom in or out by this factor, about the middle of the screen. */
   onZoomBy: (factor: number) => void;
   onIcons: () => void;
+  /** Move the selected object one step forward (1) or backward (-1) in the stacking order. */
+  onZOrder: (dir: 1 | -1) => void;
   onShare: () => void;
   onNew: () => void;
   /** The colour or line size was picked: restyle the selected icon, if any. */
@@ -62,6 +67,10 @@ export function createToolbar(el: HTMLElement, opts: {
   el.innerHTML = `
    <div class="bar bar-main">
     <div class="grp tools"></div>
+    <div class="grp zorder">
+      <button id="zup" title="Bring forward (Ctrl/Cmd+])" aria-label="Bring forward" disabled>${CHEVRON_UP}</button>
+      <button id="zdown" title="Send backward (Ctrl/Cmd+[)" aria-label="Send backward" disabled>${CHEVRON_DOWN}</button>
+    </div>
     <div class="grp colors">
       <div class="slot colorslot">
         <button id="colorbtn" class="tool fillbtn colorbtn" title="Pen colour" aria-label="Pen colour">
@@ -262,9 +271,18 @@ export function createToolbar(el: HTMLElement, opts: {
     b.onclick = () => pickFill(c);
     fillFly.appendChild(b);
   }
-  function pickFill(c: string | null) {
+  // Any colour at all, like the pen colour: the wheel sits after the swatches and the
+  // menu stays open while it is used (on iOS the colour picker opens over the page).
+  const fillWell = document.createElement('label');
+  fillWell.className = 'colorwell fillwell';
+  fillWell.title = 'Custom fill colour';
+  fillWell.innerHTML = '<input type="color" id="fillcolor" aria-label="Custom fill colour" />';
+  fillFly.appendChild(fillWell);
+  const fillInput = fillWell.querySelector<HTMLInputElement>('input')!;
+  fillInput.oninput = () => pickFill(fillInput.value, false);
+  function pickFill(c: string | null, close = true) {
     settings.fill = c;
-    fillFly.hidden = true;
+    if (close) fillFly.hidden = true;
     sync();
     opts.onChange();
     opts.onRestyle?.({ fill: c }); // fills the selected shape too
@@ -282,6 +300,8 @@ export function createToolbar(el: HTMLElement, opts: {
     sync(); opts.onChange();
     if (!isEraser()) opts.onRestyle?.({ size: v });
   };
+  q('#zup').onclick = () => opts.onZOrder(1);
+  q('#zdown').onclick = () => opts.onZOrder(-1);
   icons.onclick = opts.onIcons;
   q('#share').onclick = () => opts.onShare();
   q('#new').onclick = () => opts.onNew();
@@ -330,11 +350,21 @@ export function createToolbar(el: HTMLElement, opts: {
     fillBtn.classList.toggle('nofill', settings.fill === null);
     fillFly.querySelectorAll<HTMLElement>('.swatch').forEach(b =>
       b.classList.toggle('active', settings.fill === (b.dataset.fill ?? null)));
+    // The wheel shows the fill colour, and is ringed when the fill is none of the swatches.
+    const custom = settings.fill !== null && !SWATCHES.includes(settings.fill);
+    fillWell.style.setProperty('--c', settings.fill ?? '#ffffff');
+    fillWell.classList.toggle('active', custom);
+    if (settings.fill && /^#[0-9a-f]{6}$/i.test(settings.fill)) fillInput.value = settings.fill;
   }
   sync();
 
   return {
     sync,
+    /** The arrows only work on a selected object that has room to move that way. */
+    setZOrder(canUp: boolean, canDown: boolean) {
+      q<HTMLButtonElement>('#zup').disabled = !canUp;
+      q<HTMLButtonElement>('#zdown').disabled = !canDown;
+    },
     setHistory(canUndo: boolean, canRedo: boolean) { undo.disabled = !canUndo; redo.disabled = !canRedo; },
     setZoom(z: number) { zoomNow = z; zoom.textContent = `${Math.round(z * 100)}%`; sync(); },
     setIconsOpen(open: boolean) { icons.classList.toggle('open', open); },
