@@ -104,6 +104,11 @@ body { position: fixed; inset: 0; -webkit-user-select: none; user-select: none; 
 #toolbar .magnetbtn.on .slash { display: none; }
 #toolbar .magnetbtn.on .pill { background: #1971c2; color: #fff; }
 .flyout.fills { gap: 8px; padding: 8px 10px; }
+/* Pen colour menu: the swatches wrap, with the custom colour well after them. */
+.flyout.colorfly { gap: 10px; padding: 10px 12px; align-items: center; flex-wrap: wrap; justify-content: center; width: max-content; max-width: min(340px, calc(100vw - 16px)); }
+/* Two tidy rows of four. */
+.colorfly .swatches { display: grid; grid-template-columns: repeat(4, auto); justify-content: center; gap: 8px; }
+.colorchip { width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid #adb5bd; background: var(--c, #1e1e1e); }
 
 /* Fill: a chip showing the colour, or white with a red slash for none. */
 #toolbar .fillbtn { width: 58px; height: 50px; padding: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
@@ -234,3 +239,64 @@ body[data-armed="1"] #board { cursor: copy; }
   .modal-actions { flex-direction: row; justify-content: flex-end; }
   .modal-actions .m-cancel { order: -1; margin-right: auto; }
 }
+
+/* --- history group and the phone-only More button ------------------------- */
+.history { display: flex; gap: 6px; align-items: center; flex: 0 0 auto; }
+.more-grp { display: none; }
+#more svg { width: 22px; height: 22px; }
+#toolbar.more-open #more { background: #d0ebff; box-shadow: inset 0 0 0 1.5px #1971c2; }
+
+/* --- phone ---------------------------------------------------------------- */
+/* A narrow screen, or a short one such as a phone held sideways. The bar drops to
+   the bottom where a thumb reaches and keeps only the essentials in one slim row:
+   the four tools, undo and redo, and a More button. More opens the rest (colours,
+   fill, size, icon library, share, new, zoom) in a panel just above the row.
+   Menus open upward, and the icon library sits above the bar. */
+@media (max-width: 640px), (max-height: 500px) {
+  #toolbar {
+    top: auto; bottom: max(8px, env(safe-area-inset-bottom));
+    left: max(8px, env(safe-area-inset-left)); right: max(8px, env(safe-area-inset-right));
+    width: auto; max-width: none; margin: 0; padding: 6px; gap: 6px;
+    flex-wrap: wrap; justify-content: center;
+  }
+  /* The essentials form the bottom row; the panel stacks above it. */
+  #toolbar .tools, #toolbar .history, #toolbar .more-grp { order: 2; }
+  #toolbar .colors, #toolbar .sizing, #toolbar .actions { order: 1; display: none; flex-wrap: wrap; justify-content: center; }
+  #toolbar.more-open .colors, #toolbar.more-open .sizing, #toolbar.more-open .actions { display: flex; }
+  .more-grp { display: flex; }
+
+  /* Icon-only tools, so four of them plus undo, redo and More fit in 375 px. */
+  #toolbar .tool .cap { display: none; }
+  #toolbar .tool { width: 44px; height: 44px; }
+  #toolbar button:not(.swatch) { height: 44px; min-width: 44px; }
+  /* The fill button keeps its caption: a chip alone does not say what it is. */
+  #toolbar .fillbtn { width: auto; padding: 0 10px; flex-direction: row; gap: 6px; }
+  #toolbar .fillbtn .cap { display: inline; }
+  .tools { gap: 4px; }
+  .swatches { gap: 5px; }
+  .swatch { width: 30px; height: 30px; }
+  .colorwell { width: 32px; height: 32px; }
+  #size { flex: 1 1 140px; min-width: 120px; }
+
+  /* Menus open upward, because the bar is at the bottom. */
+  .flyout { top: auto; bottom: calc(100% + 6px); }
+  .flyout::before { top: auto; bottom: -10px; }
+
+  /* Everything that used to sit under the top bar now sits above the bottom one. */
+  #icons-panel {
+    left: max(8px, env(safe-area-inset-left)); right: max(8px, env(safe-area-inset-right));
+    width: auto; top: auto;
+    bottom: calc(var(--toolbar-h, 60px) + 14px + max(8px, env(safe-area-inset-bottom)));
+    max-height: min(46vh, calc(100vh - var(--toolbar-h, 60px) - 40px));
+  }
+  #hint { bottom: calc(var(--toolbar-h, 60px) + 20px + max(8px, env(safe-area-inset-bottom))); max-width: calc(100vw - 24px); white-space: normal; text-align: center; }
+  #badge { top: calc(8px + env(safe-area-inset-top)); bottom: auto; }
+}
+/* Upright phone: each part of the panel gets a full row. */
+@media (max-width: 640px) {
+  #toolbar .colors, #toolbar .sizing, #toolbar .actions { width: 100%; }
+  #toolbar .colors { gap: 8px 10px; }
+}
+
+/* The sheet's header and tab row keep their height; only the icon grid scrolls. */
+.panel__head, .panel__tabs { flex: 0 0 auto; }

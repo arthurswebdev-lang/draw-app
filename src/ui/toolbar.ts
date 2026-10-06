@@ -34,6 +34,8 @@ const CAPTIONS: Record<Tool, string> = {
 const MAGNET_ICON = svg('<path d="M6 3v10a6 6 0 0 0 12 0V3"/><path d="M6 8h4M14 8h4"/><path class="slash" d="M3 3l18 18"/>');
 const SHARE_ICON = svg('<path d="M12 15V3"/><path d="m7 8 5-5 5 5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/>');
 const NEW_ICON = svg('<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 11v6M9 14h6"/>');
+// Shown only on a phone, where the bar keeps just the essentials and this opens the rest.
+const MORE_ICON = '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>';
 const LIBRARY_ICON = svg('<rect x="3" y="3" width="7" height="7" rx="1"/><circle cx="17.5" cy="6.5" r="3.5"/><path d="M3 21l3.5-7L10 21z"/><rect x="14" y="14" width="7" height="7" rx="1"/>');
 
 /** A toolbar button that stands for several tools, and shows the one in use. */
@@ -62,8 +64,15 @@ export function createToolbar(el: HTMLElement, opts: {
   el.innerHTML = `
     <div class="grp tools"></div>
     <div class="grp colors">
-      <div class="swatches"></div>
-      <label class="colorwell" title="Custom color"><input type="color" id="color" /></label>
+      <div class="slot colorslot">
+        <button id="colorbtn" class="tool fillbtn colorbtn" title="Pen colour" aria-label="Pen colour">
+          <span class="colorchip"></span><span class="cap">Color</span>
+        </button>
+        <div class="flyout colorfly" hidden>
+          <div class="swatches"></div>
+          <label class="colorwell" title="Custom colour"><input type="color" id="color" /></label>
+        </div>
+      </div>
       <div class="slot fillslot">
         <button id="fill" class="tool fillbtn" title="Fill colour for new shapes" aria-label="Fill colour">
           <span class="fillchip"></span><span class="cap">Fill</span>
@@ -75,15 +84,20 @@ export function createToolbar(el: HTMLElement, opts: {
       <input type="range" id="size" title="Size ([ and ])" />
       <span class="preview"><i id="dot"></i></span>
     </div>
+    <div class="grp history">
+      <button id="undo" title="Undo (Cmd/Ctrl+Z)" aria-label="Undo">↶</button>
+      <button id="redo" title="Redo (Shift+Cmd/Ctrl+Z)" aria-label="Redo">↷</button>
+    </div>
     <div class="grp actions">
       <button id="icons" title="Icon library (I)" aria-label="Icon library">${LIBRARY_ICON}</button>
       <button id="share" title="Share or save as PNG" aria-label="Share or save as PNG">${SHARE_ICON}</button>
       <button id="new" title="New drawing" aria-label="New drawing">${NEW_ICON}</button>
-      <button id="undo" title="Undo (Cmd/Ctrl+Z)" aria-label="Undo">↶</button>
-      <button id="redo" title="Redo (Shift+Cmd/Ctrl+Z)" aria-label="Redo">↷</button>
       <button id="zoomout" title="Zoom out" aria-label="Zoom out">−</button>
       <button id="zoom" title="Reset zoom to 100%">100%</button>
       <button id="zoomin" title="Zoom in" aria-label="Zoom in">+</button>
+    </div>
+    <div class="grp more-grp">
+      <button id="more" title="More: colours, size, icons, share" aria-label="More" aria-expanded="false">${MORE_ICON}</button>
     </div>`;
   const q = <T extends HTMLElement>(s: string) => el.querySelector<T>(s)!;
   const toolBox = q('.tools');
@@ -98,6 +112,9 @@ export function createToolbar(el: HTMLElement, opts: {
   const fillBtn = q<HTMLButtonElement>('#fill');
   const fillFly = q('.fills');
   const fillSlot = q('.fillslot');
+  const colorBtn = q<HTMLButtonElement>('#colorbtn');
+  const colorFly = q('.colorfly');
+  const colorSlot = q('.colorslot');
 
   const isEraser = () => settings.tool === 'eraser' || settings.tool === 'stroke-eraser';
 
@@ -211,7 +228,7 @@ export function createToolbar(el: HTMLElement, opts: {
     b.dataset.color = c;
     b.style.background = c;
     b.title = c;
-    b.onclick = () => { pickColor(c); };
+    b.onclick = () => { pickColor(c); colorFly.hidden = true; };
     swatchBox.appendChild(b);
   }
 
@@ -253,6 +270,9 @@ export function createToolbar(el: HTMLElement, opts: {
   }
   fillBtn.onclick = () => { if (fillFly.hidden) open(fillFly); else fillFly.hidden = true; };
   hoverable(fillSlot, fillFly);
+  // Pen colour lives in one button with a menu, exactly like Fill.
+  colorBtn.onclick = () => { if (colorFly.hidden) open(colorFly); else colorFly.hidden = true; };
+  hoverable(colorSlot, colorFly);
 
   color.oninput = () => pickColor(color.value);
   size.oninput = () => {
@@ -261,9 +281,22 @@ export function createToolbar(el: HTMLElement, opts: {
     sync(); opts.onChange();
     if (!isEraser()) opts.onRestyle?.({ size: v });
   };
-  icons.onclick = opts.onIcons;
-  q('#share').onclick = () => opts.onShare();
-  q('#new').onclick = () => opts.onNew();
+  // On a phone the colours, size and these buttons sit in a panel that the More
+  // button opens. Using the library, sharing or starting anew puts the panel away
+  // so what you chose to see is not hidden behind it.
+  const more = q<HTMLButtonElement>('#more');
+  const setMore = (open: boolean) => {
+    el.classList.toggle('more-open', open);
+    more.setAttribute('aria-expanded', String(open));
+  };
+  more.onclick = () => setMore(!el.classList.contains('more-open'));
+  // Touching the board puts the panel away too, and still draws.
+  document.addEventListener('pointerdown', e => {
+    if (el.classList.contains('more-open') && !el.contains(e.target as Node)) setMore(false);
+  }, true);
+  icons.onclick = () => { setMore(false); opts.onIcons(); };
+  q('#share').onclick = () => { setMore(false); opts.onShare(); };
+  q('#new').onclick = () => { setMore(false); opts.onNew(); };
   let zoomNow = 1;
   undo.onclick = opts.onUndo;
   redo.onclick = opts.onRedo;
@@ -276,6 +309,7 @@ export function createToolbar(el: HTMLElement, opts: {
     icons.classList.toggle('active', settings.tool === 'select');
     color.value = /^#[0-9a-f]{6}$/i.test(settings.color) ? settings.color : '#000000';
     color.parentElement!.style.setProperty('--c', settings.color);
+    colorBtn.style.setProperty('--c', settings.color);
     size.min = pen ? '1' : '4';
     size.max = pen ? '40' : '120';
     size.value = String(pen ? settings.size : settings.eraserSize);
