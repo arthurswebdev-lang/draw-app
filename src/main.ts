@@ -7,6 +7,8 @@ import { attachPen } from './input/pen';
 import { attachNavigate } from './input/navigate';
 import { attachEraser } from './input/eraser';
 import { attachSelect } from './input/select';
+import { attachShapes } from './input/shapes';
+import { zoomAt } from './camera';
 import { createToolbar } from './ui/toolbar';
 import { createIconsPanel } from './ui/icons-panel';
 import { History } from './state/history';
@@ -21,13 +23,20 @@ async function main() {
     document.getElementById('live') as HTMLCanvasElement,
   );
   const history = new History();
-  const settings: ToolSettings = { tool: 'pen', color: '#1e1e1e', size: 4, eraserSize: 24 };
+  const settings: ToolSettings = {
+    tool: 'pen', color: '#1e1e1e', size: 4, eraserSize: 24,
+    fill: null, lastEraser: 'eraser', lastShape: 'rect', sizes: {},
+  };
+  const isEraserTool = (t: Tool) => t === 'eraser' || t === 'stroke-eraser';
+  const defaultSize = (t: Tool) => (isEraserTool(t) ? 24 : 4);
 
   const store = await createStore();
   const savedCam = await store.getMeta<Camera>('camera');
   const savedSettings = await store.getMeta<ToolSettings>('pen');
   if (savedCam) renderer.camera = savedCam;
-  if (savedSettings) Object.assign(settings, savedSettings);
+  if (savedSettings) Object.assign(settings, savedSettings, { sizes: { ...savedSettings.sizes } });
+  // Settings saved before the shape tools existed can name a tool that is not here.
+  if (!['pen', 'eraser', 'stroke-eraser', 'select', 'line', 'rect', 'ellipse', 'polygon'].includes(settings.tool)) settings.tool = 'pen';
   renderer.setItems(await store.getAllItems());
   navigator.storage?.persist?.().catch(() => {});
 
@@ -38,6 +47,7 @@ async function main() {
   const saveMeta = () => {
     clearTimeout(metaTimer);
     metaTimer = window.setTimeout(() => {
+      settings.sizes[settings.tool] = isEraserTool(settings.tool) ? settings.eraserSize : settings.size;
       guard(Promise.all([store.setMeta('camera', renderer.camera), store.setMeta('pen', { ...settings })]));
     }, 300);
   };
@@ -47,7 +57,9 @@ async function main() {
     onChange: () => { applyTool(); saveMeta(); },
     onUndo: () => undo(),
     onRedo: () => redo(),
-    onZoomReset: () => setCamera({ ...renderer.camera, zoom: 1 }),
+    // Zoom about the middle of the screen, so what you are looking at stays put.
+    onZoomBy: f => setCamera(zoomAt(renderer.camera, window.innerWidth / 2, window.innerHeight / 2, f)),
+    onZoomReset: () => setCamera(zoomAt(renderer.camera, window.innerWidth / 2, window.innerHeight / 2, 1 / renderer.camera.zoom)),
     onIcons: () => { toolbar.setIconsOpen(panel.toggle()); },
     // The colours and line size also restyle the selected icon.
     onRestyle: patch => {
@@ -71,7 +83,20 @@ async function main() {
   // Declared before applyTool() first runs; assigned once the board is wired up.
   let eraser: ReturnType<typeof attachEraser> | undefined;
   let select: ReturnType<typeof attachSelect> | undefined;
+  let shapes: ReturnType<typeof attachShapes> | undefined;
+  let prevTool = settings.tool;
   const applyTool = () => {
+    if (settings.tool !== prevTool) {
+      // Every tool keeps its own size: put away the one being left, bring back the
+      // one being picked. (Icons use the select tool's size, so a thick pen never
+      // makes thick icons, and picking an icon to resize never changes the pen.)
+      settings.sizes[prevTool] = isEraserTool(prevTool) ? settings.eraserSize : settings.size;
+      const size = settings.sizes[settings.tool] ?? defaultSize(settings.tool);
+      if (isEraserTool(settings.tool)) settings.eraserSize = size; else settings.size = size;
+      prevTool = settings.tool;
+      shapes?.cancel();
+      toolbar.sync();
+    }
     document.body.dataset.tool = settings.tool;
     eraser?.refresh();
     // Leaving the select tool drops the handles: they would otherwise sit over
@@ -110,14 +135,9 @@ async function main() {
     getSettings: () => settings,
     isNavigating: nav.isNavigating,
     onCommit: commit,
-    onSelect: i => {
-      // Show the icon's own colour and line size in the toolbar, so touching
-      // either one edits what is selected rather than something unseen.
-      if (!i) return;
-      settings.color = i.color;
-      settings.size = Math.min(40, Math.max(1, Math.round(i.size * renderer.camera.zoom)));
-      toolbar.sync();
-    },
+    // Selecting an icon deliberately leaves the toolbar alone: it must never
+    // overwrite the colour or size you chose with those of an old icon.
+    onSelect: () => {},
     onArmChange: kind => {
       panel.setArmed(kind);
       document.body.dataset.armed = kind ? '1' : '';
@@ -131,6 +151,8 @@ async function main() {
   new ResizeObserver(() => {
     document.documentElement.style.setProperty('--toolbar-h', `${toolbarEl.offsetHeight}px`);
   }).observe(toolbarEl);
+
+  shapes = attachShapes({ board, renderer, getSettings: () => settings, isNavigating: nav.isNavigating, onCommit: commit });
 
   function undo() {
     select?.flush();
@@ -162,13 +184,17 @@ async function main() {
     else if (!mod && e.key.toLowerCase() === 'e') setTool('eraser');
     else if (!mod && e.key.toLowerCase() === 'x') setTool('stroke-eraser');
     else if (!mod && e.key.toLowerCase() === 'v') setTool('select');
+    else if (!mod && e.key.toLowerCase() === 'l') setTool('line');
+    else if (!mod && e.key.toLowerCase() === 'r') setTool('rect');
+    else if (!mod && e.key.toLowerCase() === 'o') setTool('ellipse');
+    else if (!mod && e.key.toLowerCase() === 'g') setTool('polygon');
     else if (!mod && e.key.toLowerCase() === 'i') { toolbar.setIconsOpen(panel.toggle()); }
     else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); select?.deleteSelected(); }
     else if (e.key === 'Escape') select?.clear();
     else if (e.key === '[' || e.key === ']') {
       const d = e.key === '[' ? -1 : 1;
-      if (settings.tool === 'pen') settings.size = Math.min(40, Math.max(1, settings.size + d));
-      else settings.eraserSize = Math.min(120, Math.max(4, settings.eraserSize + d * 2));
+      if (isEraserTool(settings.tool)) settings.eraserSize = Math.min(120, Math.max(4, settings.eraserSize + d * 2));
+      else settings.size = Math.min(40, Math.max(1, settings.size + d));
       toolbar.sync(); saveMeta(); eraser?.refresh();
     }
   });

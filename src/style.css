@@ -68,6 +68,39 @@ body { position: fixed; inset: 0; -webkit-user-select: none; user-select: none; 
 }
 #toolbar .tool svg { width: 22px; height: 22px; }
 #toolbar .tool .cap { font-size: 10.5px; line-height: 1; color: #495057; }
+#toolbar #icons { width: 44px; padding: 0; display: grid; place-items: center; }
+#toolbar #icons svg { width: 22px; height: 22px; }
+#toolbar #zoomout, #toolbar #zoomin { font-size: 20px; padding: 0; }
+#toolbar #zoom { min-width: 58px; }
+
+/* A grouped button: one tool shown, the others in a flyout under it. */
+.slot { position: relative; flex: 0 0 auto; display: flex; }
+.slot-main::after {
+  /* Top right, clear of the caption along the bottom. */
+  content: ''; position: absolute; right: 4px; top: 4px; width: 0; height: 0;
+  border: 3.5px solid transparent; border-top-color: #868e96; border-right-color: #868e96;
+}
+.flyout {
+  position: absolute; z-index: 10; top: calc(100% + 6px); left: 50%;
+  transform: translateX(calc(-50% + var(--shift, 0px)));
+  display: flex; gap: 4px; padding: 6px; background: #fff; border-radius: 12px;
+  box-shadow: 0 6px 20px rgba(0,0,0,.2), 0 0 0 1px #e0e0e4;
+}
+/* Keeps the flyout open while the pointer crosses the gap between it and its button. */
+.flyout::before { content: ''; position: absolute; left: 0; right: 0; top: -10px; height: 10px; }
+.flyout .tool { background: #f8f9fa; }
+.flyout.fills { gap: 8px; padding: 8px 10px; }
+
+/* Fill: a chip showing the colour, or white with a red slash for none. */
+#toolbar .fillbtn { width: 58px; height: 50px; padding: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+.fillchip {
+  width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid #adb5bd; background: var(--fill, #fff);
+}
+.fillbtn.nofill .fillchip, .swatch.none {
+  background: linear-gradient(135deg, transparent 44%, #e03131 44% 56%, transparent 56%), #fff;
+}
+.swatch.none { border: 2px solid #fff; }
+
 #toolbar .tool.active, #toolbar #icons.open { background: #d0ebff; box-shadow: inset 0 0 0 1.5px #1971c2; }
 
 #badge {
@@ -140,7 +173,9 @@ body[data-armed="1"] #board { cursor: copy; }
 @media (pointer: coarse) {
   #toolbar { gap: 8px 16px; padding: 8px 12px; }
   #toolbar button:not(.swatch) { height: 44px; min-width: 44px; font-size: 17px; }
-  #toolbar .tool { width: 62px; height: 54px; }
+  #toolbar .tool, #toolbar .fillbtn { width: 62px; height: 54px; }
+  #toolbar #icons { width: 48px; }
+  #toolbar #zoomout, #toolbar #zoomin { font-size: 22px; }
   #toolbar .tool svg { width: 24px; height: 24px; }
   #toolbar .tool .cap { font-size: 11.5px; }
   .swatches { gap: 8px; }

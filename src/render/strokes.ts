@@ -1,8 +1,9 @@
-import { Camera, IconItem, isIcon, Item, Stroke, STRIDE } from '../types';
+import { Camera, IconItem, isIcon, isShape, Item, ShapeItem, Stroke, STRIDE } from '../types';
 import { intersects } from '../geometry/bbox';
 import { polyline, smooth, toPath2D } from '../geometry/smooth';
 import { iconDef } from '../icons/library';
 import { hitIcon, iconHandles } from '../geometry/icon';
+import { buildShapePath } from '../geometry/shape';
 
 export class Renderer {
   /** Pen marks and icons in one list, ordered by `createdAt` so they layer as drawn. */
@@ -13,7 +14,9 @@ export class Renderer {
    * move, so this stays a view over `items` rather than a second array that would
    * have to be kept in step with it.
    */
-  get strokes(): Stroke[] { return this.items.filter(i => !isIcon(i)) as Stroke[]; }
+  get strokes(): Stroke[] { return this.items.filter(i => !isIcon(i) && !isShape(i)) as Stroke[]; }
+
+  get shapes(): ShapeItem[] { return this.items.filter(isShape); }
 
   get icons(): IconItem[] { return this.items.filter(isIcon); }
   camera: Camera = { x: 0, y: 0, zoom: 1 };
@@ -119,8 +122,27 @@ export class Renderer {
 
   private hitCtx?: CanvasRenderingContext2D;
 
+  /** Fill first, then the outline over it, so the line is never half hidden. */
+  private drawShape(ctx: CanvasRenderingContext2D, s: ShapeItem, cached = true) {
+    let path = cached ? this.cache.get(s.id) : undefined;
+    if (!path) {
+      path = buildShapePath(s);
+      if (cached) this.cache.set(s.id, path);
+    }
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.lineWidth = s.size;
+    if (s.fill && s.shape !== 'line' && s.shape !== 'polyline') {
+      ctx.fillStyle = s.fill;
+      ctx.fill(path);
+    }
+    ctx.strokeStyle = s.color;
+    ctx.stroke(path);
+  }
+
   private drawItem(ctx: CanvasRenderingContext2D, i: Item) {
     if (isIcon(i)) this.drawIcon(ctx, i);
+    else if (isShape(i)) this.drawShape(ctx, i);
     else this.drawStroke(ctx, i, this.pathFor(i));
   }
 
@@ -261,10 +283,55 @@ export class Renderer {
     }
   }
 
+  // ---- shape being drawn ----
+  private draft: { item: ShapeItem | null; markers: { x: number; y: number }[]; ring: { x: number; y: number } | null } | null = null;
+
+  /**
+   * The shape under construction. `markers` are dots at placed polygon vertices;
+   * `ring` is the circle that shows the next click will close the polygon.
+   */
+  setDraft(item: ShapeItem | null, markers: { x: number; y: number }[] = [], ring: { x: number; y: number } | null = null) {
+    this.draft = item || markers.length || ring ? { item, markers, ring } : null;
+    if (!this.liveRaf) {
+      this.liveRaf = requestAnimationFrame(() => { this.liveRaf = 0; this.redrawLive(); });
+    }
+  }
+
+  private drawDraft(ctx: CanvasRenderingContext2D) {
+    const d = this.draft;
+    if (!d) return;
+    if (d.item) {
+      this.applyTransform(ctx);
+      this.drawShape(ctx, d.item, false);
+    }
+    // Markers and ring are chrome: fixed size on screen, whatever the zoom.
+    const s = this.scale, c = this.camera;
+    ctx.setTransform(s, 0, 0, s, 0, 0);
+    const at = (p: { x: number; y: number }) => ({ x: (p.x - c.x) * c.zoom, y: (p.y - c.y) * c.zoom });
+    ctx.fillStyle = '#1971c2';
+    for (const m of d.markers) {
+      const p = at(m);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (d.ring) {
+      const p = at(d.ring);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 13, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(25, 113, 194, 0.18)';
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#1971c2';
+      ctx.stroke();
+    }
+  }
+
   private redrawLive() {
     const ctx = this.liveCtx;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, this.liveCanvas.width, this.liveCanvas.height);
+    this.drawDraft(ctx);
     if (!this.live) return;
     this.applyTransform(ctx);
     const { points, color, size } = this.live;

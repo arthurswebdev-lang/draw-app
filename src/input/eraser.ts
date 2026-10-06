@@ -1,8 +1,11 @@
 import { Renderer } from '../render/strokes';
 import { screenToWorld } from '../camera';
-import { Change, Item, Stroke, ToolSettings } from '../types';
+import { Change, Item, Stroke, STRIDE, ToolSettings } from '../types';
 import { computeBBox } from '../geometry/bbox';
 import { eraseSegment, Pt, strokeTouches } from '../geometry/erase';
+import { shapeCenterline, shapeTouches } from '../geometry/shape';
+
+const isEraser = (t: string) => t === 'eraser' || t === 'stroke-eraser';
 
 export function attachEraser(opts: {
   board: HTMLElement;
@@ -21,7 +24,7 @@ export function attachEraser(opts: {
 
   const placeRing = () => {
     const s = getSettings();
-    if (s.tool === 'pen' || !lastScreen) { ring.hidden = true; return; }
+    if (!isEraser(s.tool) || !lastScreen) { ring.hidden = true; return; }
     ring.hidden = false;
     ring.style.width = ring.style.height = `${s.eraserSize}px`;
     ring.style.transform = `translate(${lastScreen.x - s.eraserSize / 2}px, ${lastScreen.y - s.eraserSize / 2}px)`;
@@ -64,6 +67,27 @@ export function attachEraser(opts: {
         }
       }
     }
+    // A shape without fill is just an outline, so the eraser cuts it like a pen line:
+    // it becomes plain strokes and the part you touch is gone. A filled shape, like
+    // an icon, is one object and goes whole. The object eraser always takes it whole.
+    for (const sh of renderer.shapes) {
+      const bb = sh.bbox;
+      if (bb.maxX < sweep.minX || bb.minX > sweep.maxX || bb.maxY < sweep.minY || bb.minY > sweep.maxY) continue;
+      if (!shapeTouches(sh, a, b, radius)) continue;
+      if (s.tool === 'stroke-eraser' || sh.fill) { remove.push(sh); continue; }
+      const xy = shapeCenterline(sh);
+      const pts = new Float32Array((xy.length / 2) * STRIDE);
+      for (let i = 0, j = 0; i < xy.length; i += 2, j += STRIDE) { pts[j] = xy[i]; pts[j + 1] = xy[i + 1]; pts[j + 2] = 0.5; }
+      const pieces = eraseSegment(pts, sh.size, a, b, radius, true);
+      if (!pieces) continue;
+      remove.push(sh);
+      for (const p of pieces) {
+        add.push({
+          id: crypto.randomUUID(), color: sh.color, size: sh.size,
+          points: p, bbox: computeBBox(p, sh.size), createdAt: sh.createdAt, poly: true,
+        });
+      }
+    }
     // An icon is one object: either eraser takes the whole thing if it touches
     // the drawn outline. (Cutting a piece out of an icon would leave a broken one.)
     for (const ic of renderer.icons) {
@@ -81,7 +105,7 @@ export function attachEraser(opts: {
   }
 
   board.addEventListener('pointerdown', e => {
-    if (e.button !== 0 || session || isNavigating() || getSettings().tool === 'pen') return;
+    if (e.button !== 0 || session || isNavigating() || !isEraser(getSettings().tool)) return;
     board.setPointerCapture(e.pointerId);
     const p = worldPoint(e);
     session = { id: e.pointerId, last: p, originals: new Map(), added: new Map() };

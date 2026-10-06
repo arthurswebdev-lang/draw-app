@@ -38,13 +38,28 @@ export function attachNavigate(opts: {
     if (e.code === 'Space') { space = false; board.style.cursor = ''; }
   });
 
-  // Safari would otherwise zoom the whole page on a pinch.
-  for (const t of ['gesturestart', 'gesturechange', 'gestureend']) {
-    document.addEventListener(t, e => e.preventDefault());
-  }
+  const touches = new Map<number, { x: number; y: number }>();
+
+  // Safari on a Mac reports a trackpad pinch as gesture events, not as a ctrl+wheel
+  // like Chrome does, and would otherwise zoom the whole page. Use them to zoom the
+  // board around the pointer. (On a touch screen the two-finger code below does the
+  // work, and Safari sends these too, so they are skipped while two fingers are down.)
+  type PinchEvent = Event & { scale: number; clientX: number; clientY: number };
+  let lastScale = 1;
+  document.addEventListener('gesturestart', e => {
+    e.preventDefault();
+    lastScale = (e as PinchEvent).scale || 1;
+  });
+  document.addEventListener('gesturechange', e => {
+    e.preventDefault();
+    const g = e as PinchEvent;
+    if (touches.size >= 2 || !g.scale) return;
+    setCamera(zoomAt(getCamera(), g.clientX, g.clientY, g.scale / lastScale));
+    lastScale = g.scale;
+  });
+  document.addEventListener('gestureend', e => e.preventDefault());
 
   // ---- touch: two fingers pan and zoom ----
-  const touches = new Map<number, { x: number; y: number }>();
   let gesture: { cx: number; cy: number; dist: number } | null = null;
   let penDown = 0;
   const abort = () => board.dispatchEvent(new Event('abort-gesture'));

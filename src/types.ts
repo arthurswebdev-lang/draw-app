@@ -39,15 +39,57 @@ export type IconItem = {
   createdAt: number;
 };
 
-/** Everything the board holds. Pen marks and icons live in one ordered list. */
-export type Item = Stroke | IconItem;
+export type ShapeKind = 'line' | 'rect' | 'ellipse' | 'polygon' | 'polyline';
+
+/**
+ * A drawn shape. Kept as its defining points, not as pixels or as a pen stroke,
+ * so a square stays exactly square and a circle exactly round at any zoom.
+ *
+ * `pts` is [x1, y1, x2, y2] for a line, and for a rectangle or oval the two
+ * opposite corners of its box. For a polygon or an open polyline it is every
+ * vertex in turn: [x, y, x, y, ...].
+ */
+export type ShapeItem = {
+  id: string;
+  shape: ShapeKind;
+  pts: number[];
+  /** Outline colour. */
+  color: string;
+  /** Fill colour, or null for see-through. Only closed shapes use it. */
+  fill: string | null;
+  /** Outline width in world units. */
+  size: number;
+  bbox: BBox;
+  createdAt: number;
+};
+
+/** Everything the board holds. Pen marks, icons and shapes live in one ordered list. */
+export type Item = Stroke | IconItem | ShapeItem;
 
 export const isIcon = (i: Item): i is IconItem => 'kind' in i;
+export const isShape = (i: Item): i is ShapeItem => 'shape' in i;
 
-export type Tool = 'pen' | 'eraser' | 'stroke-eraser' | 'select';
+export type Tool =
+  | 'pen' | 'eraser' | 'stroke-eraser' | 'select'
+  | 'line' | 'rect' | 'ellipse' | 'polygon';
 
 /** Sizes are in screen pixels at the time of use. */
-export type ToolSettings = { tool: Tool; color: string; size: number; eraserSize: number };
+export type ToolSettings = {
+  tool: Tool;
+  color: string;
+  size: number;
+  eraserSize: number;
+  /** Fill for new closed shapes; null leaves them see-through. */
+  fill: string | null;
+  /** Which eraser, and which shape, the toolbar's two grouped buttons show. */
+  lastEraser: Tool;
+  lastShape: Tool;
+  /**
+   * Each tool's own size, so switching tools brings that tool's size back. `size`
+   * and `eraserSize` above always hold the size of the tool in hand.
+   */
+  sizes: Partial<Record<Tool, number>>;
+};
 
 /**
  * One undoable action: items taken away and items put in.
