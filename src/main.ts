@@ -11,8 +11,8 @@ import { attachShapes } from './input/shapes';
 import { zoomAt } from './camera';
 import { createToolbar } from './ui/toolbar';
 import { createIconsPanel } from './ui/icons-panel';
-import { exportPng, shareOrSave } from './export/png';
-import { confirmNew } from './ui/modal';
+import { exportPng, lastBackground, PngBackground, rememberBackground, shareOrSave } from './export/png';
+import { chooseBackground, confirmNew } from './ui/modal';
 import { History } from './state/history';
 import { iconDef } from './icons/library';
 import { Camera, Change, Tool, ToolSettings } from './types';
@@ -80,7 +80,7 @@ async function main() {
       }
     },
     onIcons: () => { toolbar.setIconsOpen(panel.toggle()); },
-    onShare: () => { void shareFlow(); },
+    onShare: () => { void shareFlow(true); },
     onNew: () => { void newFlow(); },
     // The colours and line size also restyle the selected icon.
     onRestyle: patch => {
@@ -133,12 +133,26 @@ async function main() {
     clearTimeout(toastTimer);
     toastTimer = window.setTimeout(() => { hint.hidden = true; }, 2000);
   };
-  async function shareFlow() {
+  /**
+   * Share the drawing as a PNG. `ask` shows the background dialog; without it the
+   * background chosen last time is used (the New dialog's "Save a copy" does that,
+   * so two dialogs never stack).
+   */
+  async function shareFlow(ask = true) {
     if (renderer.items.length === 0) { toast('Nothing to share yet'); return; }
     try {
-      const blob = await exportPng(renderer);
-      if (!blob) { toast('Nothing to share yet'); return; }
-      await shareOrSave(blob);
+      let picked: { bg: PngBackground; blob: Blob } | null;
+      if (ask) {
+        picked = await chooseBackground({ initial: lastBackground(), render: bg => exportPng(renderer, bg) });
+        if (!picked) return; // cancelled, or the picture could not be made
+      } else {
+        const bg = lastBackground();
+        const blob = await exportPng(renderer, bg);
+        if (!blob) { toast('Could not make the picture'); return; }
+        picked = { bg, blob };
+      }
+      rememberBackground(picked.bg);
+      await shareOrSave(picked.blob);
     } catch (err) {
       console.error(err);
       toast('Could not save the picture');
@@ -148,7 +162,7 @@ async function main() {
     shapes?.cancel();
     if (renderer.items.length === 0) { setCamera({ x: 0, y: 0, zoom: 1 }); return; }
     select?.flush();
-    const ok = await confirmNew({ onSaveCopy: shareFlow });
+    const ok = await confirmNew({ onSaveCopy: () => shareFlow(false) });
     if (!ok) return;
     const change = { removed: [...renderer.items], added: [] as typeof renderer.items };
     select?.clear();

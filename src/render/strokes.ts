@@ -170,7 +170,7 @@ export class Renderer {
    * Draws every committed item onto a new white canvas, fitted to the drawing.
    * No selection, no live draft, and the on-screen camera is not touched.
    */
-  exportCanvas(opts: { scale?: number; pad?: number; maxSide?: number } = {}): HTMLCanvasElement | null {
+  exportCanvas(opts: { scale?: number; pad?: number; maxSide?: number; maxPixels?: number; background?: 'white' | 'transparent' } = {}): HTMLCanvasElement | null {
     if (this.items.length === 0) return null;
     const pad = opts.pad ?? 32;
     const maxSide = opts.maxSide ?? 4096;
@@ -181,14 +181,19 @@ export class Renderer {
     }
     if (![minX, minY, maxX, maxY].every(Number.isFinite)) return null;
     const w = maxX - minX + 2 * pad, h = maxY - minY + 2 * pad;
-    const k = Math.min(opts.scale ?? 2, maxSide / Math.max(w, h));
+    // iPhone Safari refuses (or silently blanks) canvases of more than about 16 million
+    // pixels, so stay well inside that as well as inside a side limit.
+    const maxPixels = opts.maxPixels ?? 8_000_000;
+    const k = Math.min(opts.scale ?? 2, maxSide / Math.max(w, h), Math.sqrt(maxPixels / (w * h)));
     const canvas = document.createElement('canvas');
     canvas.width = Math.max(1, Math.round(w * k));
     canvas.height = Math.max(1, Math.round(h * k));
     const ctx = canvas.getContext('2d');
     if (!ctx) return null;
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if ((opts.background ?? 'white') === 'white') {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
     ctx.setTransform(k, 0, 0, k, (-minX + pad) * k, (-minY + pad) * k);
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';

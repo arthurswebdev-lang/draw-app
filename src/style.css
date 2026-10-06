@@ -315,3 +315,16 @@ body[data-armed="1"] #board { cursor: copy; }
 
 /* The sheet's header and tab row keep their height; only the icon grid scrolls. */
 .panel__head, .panel__tabs { flex: 0 0 auto; }
+
+/* --- share dialog: background choice ------------------------------------- */
+.modal-actions .m-bg { display: flex; align-items: center; justify-content: flex-start; text-align: left; }
+.bg-chip {
+  flex: 0 0 auto; width: 24px; height: 24px; border-radius: 6px; margin-right: 10px;
+  background: #fff; box-shadow: inset 0 0 0 1px #adb5bd;
+}
+/* A checkerboard, the usual picture of "see-through". */
+.bg-chip.clear {
+  background-color: #fff;
+  background-image: conic-gradient(#d0d4d9 25%, #fff 0 50%, #d0d4d9 0 75%, #fff 0);
+  background-size: 12px 12px;
+}
