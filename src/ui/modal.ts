@@ -72,7 +72,7 @@ export function chooseBackground(opts: {
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="bg-title">
         <h2 id="bg-title">Share as PNG</h2>
         <p>Choose the background of the picture.</p>
-        <div class="modal-actions">
+        <div class="modal-actions stack">
           <button type="button" class="m-bg${mark('white')}" data-bg="white"><span class="bg-chip"></span>White background</button>
           <button type="button" class="m-bg${mark('transparent')}" data-bg="transparent"><span class="bg-chip clear"></span>Transparent background</button>
           <button type="button" class="m-cancel" data-act="cancel">Cancel</button>

@@ -235,9 +235,11 @@ body[data-armed="1"] #board { cursor: copy; }
 .modal-actions button:disabled { opacity: .5; cursor: default; }
 .modal-actions .m-secondary { background: #d0ebff; color: #1971c2; box-shadow: inset 0 0 0 1.5px #1971c2; }
 .modal-actions .m-danger { background: #e03131; color: #fff; font-weight: 600; }
+/* Short buttons sit in a row on a wider screen, and wrap rather than spill out of the
+   card. A dialog whose buttons are long (the share one) adds `stack` to stay in a column. */
 @media (min-width: 480px) {
-  .modal-actions { flex-direction: row; justify-content: flex-end; }
-  .modal-actions .m-cancel { order: -1; margin-right: auto; }
+  .modal-actions:not(.stack) { flex-direction: row; flex-wrap: wrap; justify-content: flex-end; }
+  .modal-actions:not(.stack) .m-cancel { order: -1; margin-right: auto; }
 }
 
 /* --- the bars -------------------------------------------------------------- */
