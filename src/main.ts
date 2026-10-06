@@ -183,11 +183,20 @@ async function main() {
     },
   });
 
-  // Lets the icon panel sit just under the toolbar, however many rows it wraps to.
+  // Lets the icon panel, hint and badge keep clear of the bars, however many rows they
+  // wrap to. On a tablet there is one box (#toolbar). On a phone the box is gone and
+  // there are two bars: --toolbar-h is the bottom one, --top-h the top one.
   const toolbarEl = document.getElementById('toolbar')!;
-  new ResizeObserver(() => {
-    document.documentElement.style.setProperty('--toolbar-h', `${toolbarEl.offsetHeight}px`);
-  }).observe(toolbarEl);
+  const barMain = toolbarEl.querySelector<HTMLElement>('.bar-main')!;
+  const barAux = toolbarEl.querySelector<HTMLElement>('.bar-aux')!;
+  const measure = () => {
+    const root = document.documentElement.style;
+    root.setProperty('--toolbar-h', `${toolbarEl.offsetHeight || barMain.offsetHeight}px`);
+    root.setProperty('--top-h', `${barAux.offsetHeight}px`);
+  };
+  const bars = new ResizeObserver(measure);
+  for (const e of [toolbarEl, barMain, barAux]) bars.observe(e);
+  window.addEventListener('resize', measure);
 
   shapes = attachShapes({ board, renderer, getSettings: () => settings, isNavigating: nav.isNavigating, onCommit: commit });
 
