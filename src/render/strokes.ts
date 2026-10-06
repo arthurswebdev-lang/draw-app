@@ -5,7 +5,7 @@ import { iconDef } from '../icons/library';
 import { hitIcon } from '../geometry/icon';
 import { buildShapePath, shapeTouches } from '../geometry/shape';
 import { boxHandles, handlesFor, selectionBox } from '../geometry/selection';
-import { Guide } from '../geometry/guides';
+import { Guide, guidesFor } from '../geometry/guides';
 
 export class Renderer {
   /** Pen marks and icons in one list, ordered by `createdAt` so they layer as drawn. */
@@ -216,7 +216,10 @@ export class Renderer {
       if (!intersects(i.bbox, view)) continue;
       this.drawItem(ctx, i);
     }
-    if (this.selection) this.drawSelection(ctx, this.selection);
+    if (this.selection) {
+      this.drawSelection(ctx, this.selection);
+      this.drawSelectionGuide(ctx, this.selection);
+    }
     this.redrawLive();
   }
 
@@ -228,6 +231,22 @@ export class Renderer {
    * the items and never cached — it is chrome, not part of the drawing, and it
    * must not end up in an export or under another icon.
    */
+  /**
+   * The angles and sizes of a selected shape, so they can be read after it has been
+   * drawn and while it is resized, turned or reshaped. Icons have none.
+   */
+  private drawSelectionGuide(ctx: CanvasRenderingContext2D, i: Selectable) {
+    if (isIcon(i)) return;
+    const c = this.camera;
+    const g = guidesFor(i.shape, i.pts, c.zoom, i.rotation ?? 0);
+    if (!g) return;
+    const s = this.scale;
+    ctx.save();
+    ctx.setTransform(s, 0, 0, s, 0, 0);
+    this.drawGuide(ctx, g, p => ({ x: (p.x - c.x) * c.zoom, y: (p.y - c.y) * c.zoom }));
+    ctx.restore();
+  }
+
   private drawSelection(ctx: CanvasRenderingContext2D, i: Selectable) {
     const z = this.camera.zoom;
     const { corners, anchor, rotate, vertices, box } = handlesFor(i, z);

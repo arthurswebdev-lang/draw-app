@@ -72,7 +72,46 @@ describe('line guides', () => {
     const g = guidesFor('line', [0, 0, 30, 40], 1)!;
     expect(g.labels.some(l => l.text === '50')).toBe(true);
   });
-  it('has nothing to say about a polygon', () => {
-    expect(guidesFor('polygon', [0, 0, 10, 0, 5, 8], 1)).toBeNull();
+  it('has nothing to say about a shape it has no guides for', () => {
+    expect(guidesFor('polygon', [0, 0, 10, 0], 1)).toBeNull(); // not enough points
+  });
+});
+
+describe('polygon guides', () => {
+  const text = (g: ReturnType<typeof guidesFor>) => g!.labels.map(l => l.text);
+  it('shows 90° at every corner of a square polygon, and marks it exact', () => {
+    const g = guidesFor('polygon', [0, 0, 100, 0, 100, 100, 0, 100], 1)!;
+    expect(text(g)).toEqual(['90°', '90°', '90°', '90°']);
+    expect(g.exact).toBe(true);
+  });
+  it('gives a triangle inside angles that add up to 180', () => {
+    const g = guidesFor('polygon', [0, 0, 100, 0, 30, 80], 1)!;
+    const sum = text(g).reduce((t, x) => t + parseFloat(x), 0);
+    expect(sum).toBeCloseTo(180, 0);
+  });
+  it('takes the long way round at a dent', () => {
+    // An arrow-head shape: the notch at (50,40) is a reflex corner (> 180).
+    const g = guidesFor('polygon', [0, 0, 100, 0, 50, 40, 100, 100, 0, 100], 1)!;
+    const reflex = text(g).map(parseFloat).filter(a => a > 180);
+    expect(reflex.length).toBe(1);
+    // Inside angles of any simple polygon add up to (n - 2) * 180.
+    expect(text(g).reduce((t, x) => t + parseFloat(x), 0)).toBeCloseTo(3 * 180, 0);
+  });
+  it('skips the two ends of an open path', () => {
+    const g = guidesFor('polyline', [0, 0, 100, 0, 100, 100], 1)!;
+    expect(text(g)).toEqual(['90°']);
+  });
+});
+
+describe('turned rectangle guides', () => {
+  it('turns the angle arcs with the rectangle', () => {
+    const upright = guidesFor('rect', [0, 0, 200, 100], 1, 0)!;
+    const turned = guidesFor('rect', [0, 0, 200, 100], 1, Math.PI / 2)!;
+    expect(turned.arcs[0].a0).toBeCloseTo(upright.arcs[0].a0 + Math.PI / 2, 9);
+    // The top-left corner moves round the centre (100, 50): (0,0) -> (150, -50).
+    expect(turned.arcs[0].x).toBeCloseTo(150, 6);
+    expect(turned.arcs[0].y).toBeCloseTo(-50, 6);
+    // The angles themselves do not change.
+    expect(turned.labels.slice(0, 2).map(l => l.text)).toEqual(upright.labels.slice(0, 2).map(l => l.text));
   });
 });

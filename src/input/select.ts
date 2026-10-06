@@ -1,5 +1,4 @@
 import { screenToWorld } from '../camera';
-import { guidesFor } from '../geometry/guides';
 import { iconBBox, MIN_ICON, HANDLE_HIT, snapRotation } from '../geometry/icon';
 import {
   handlesFor, moveVertex, resizeShape, rotateItem, sameGeometry, selectionBox, translateItem,
@@ -199,9 +198,6 @@ export function attachSelect(opts: {
         exact: angleNow.snapped || Math.abs(angleNow.degrees / 15 - Math.round(angleNow.degrees / 15)) < 1e-6,
         labels: [{ x: handle.x, y: handle.y, dx: 34, dy: 0, text: `${angleNow.degrees}°` }],
       });
-    } else if (mode === 'vertex' && !isIcon(next) && next.shape === 'line') {
-      // The same angle guides as when the line was drawn.
-      renderer.setDraft(null, [], null, guidesFor('line', next.pts, renderer.camera.zoom));
     }
   });
 
