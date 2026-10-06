@@ -280,6 +280,19 @@ body[data-armed="1"] #board { cursor: copy; }
   .bar-aux .sizing { flex: 1 1 auto; min-width: 0; }
   .bar-aux #size { flex: 1 1 auto; min-width: 60px; width: auto; }
 
+  /* No zoom buttons on a phone: pinch with two fingers. The percentage stays as a
+     small label at the edge, out of the way. Tapping it jumps to 100% and back. */
+  #zoomout, #zoomin { display: none; }
+  .zoomgrp {
+    position: fixed; right: max(10px, env(safe-area-inset-right));
+    top: calc(var(--top-h, 60px) + 14px + env(safe-area-inset-top));
+    padding: 0; background: none; box-shadow: none;
+  }
+  #toolbar .zoomgrp #zoom {
+    height: auto; min-width: 0; padding: 7px 12px; font-size: 12px; font-weight: 600; color: #6c757d;
+    background: rgba(255, 255, 255, 0.85); border-radius: 999px;
+  }
+
   /* Menus open upward, because the bar they come from is at the bottom. */
   .flyout { top: auto; bottom: calc(100% + 6px); }
   .flyout::before { top: auto; bottom: -10px; }
@@ -294,17 +307,10 @@ body[data-armed="1"] #board { cursor: copy; }
   #hint { bottom: calc(var(--toolbar-h, 60px) + 20px + max(8px, env(safe-area-inset-bottom))); max-width: calc(100vw - 24px); white-space: normal; text-align: center; }
   #badge { top: calc(var(--top-h, 60px) + 16px + env(safe-area-inset-top)); bottom: auto; }
 }
-/* Upright phone: no room for a size chip, and the zoom buttons float at the edge. */
+/* Upright phone: no room for a size chip. */
 @media (max-width: 640px) {
   .bar-aux { gap: 6px; }
   .bar-aux .preview { display: none; }
-  .zoomgrp {
-    position: fixed; right: max(8px, env(safe-area-inset-right));
-    top: calc(var(--top-h, 60px) + 16px + env(safe-area-inset-top));
-    flex-direction: column; gap: 4px; padding: 4px;
-    background: rgba(255,255,255,.94); border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,.15);
-  }
-  .zoomgrp button:not(.swatch) { height: 40px; min-width: 48px; }
 }
 
 /* The sheet's header and tab row keep their height; only the icon grid scrolls. */

@@ -54,6 +54,9 @@ async function main() {
     }, 300);
   };
 
+  /** The view to return to when the zoom label is tapped while at 100%. */
+  let beforeReset: Camera | null = null;
+
   const toolbar = createToolbar(document.getElementById('toolbar')!, {
     settings,
     onChange: () => { applyTool(); saveMeta(); },
@@ -61,7 +64,21 @@ async function main() {
     onRedo: () => redo(),
     // Zoom about the middle of the screen, so what you are looking at stays put.
     onZoomBy: f => setCamera(zoomAt(renderer.camera, window.innerWidth / 2, window.innerHeight / 2, f)),
-    onZoomReset: () => setCamera(zoomAt(renderer.camera, window.innerWidth / 2, window.innerHeight / 2, 1 / renderer.camera.zoom)),
+    // A toggle: from any zoom, jump to 100% about the middle of the screen; from 100%,
+    // jump back to exactly where you were. So tapping again and again flips between
+    // the two views.
+    onZoomReset: () => {
+      const c = renderer.camera;
+      if (Math.abs(c.zoom - 1) < 0.005) {
+        if (!beforeReset) return;
+        const back = beforeReset;
+        beforeReset = null;
+        setCamera(back);
+      } else {
+        beforeReset = { ...c };
+        setCamera(zoomAt(c, window.innerWidth / 2, window.innerHeight / 2, 1 / c.zoom));
+      }
+    },
     onIcons: () => { toolbar.setIconsOpen(panel.toggle()); },
     onShare: () => { void shareFlow(); },
     onNew: () => { void newFlow(); },

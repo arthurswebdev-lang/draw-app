@@ -96,7 +96,7 @@ export function createToolbar(el: HTMLElement, opts: {
     </div>
     <div class="grp zoomgrp">
       <button id="zoomout" title="Zoom out" aria-label="Zoom out">−</button>
-      <button id="zoom" title="Reset zoom to 100%">100%</button>
+      <button id="zoom" title="Jump to 100%; tap again to go back to the previous zoom">100%</button>
       <button id="zoomin" title="Zoom in" aria-label="Zoom in">+</button>
     </div>
    </div>`;
