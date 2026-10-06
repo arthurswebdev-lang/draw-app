@@ -55,7 +55,7 @@ export function createToolbar(el: HTMLElement, opts: {
   onShare: () => void;
   onNew: () => void;
   /** The colour or line size was picked: restyle the selected icon, if any. */
-  onRestyle?: (patch: { color?: string; size?: number }) => void;
+  onRestyle?: (patch: { color?: string; size?: number; fill?: string | null }) => void;
 }) {
   const { settings } = opts;
   // Four groups. When the bar is too narrow it wraps between groups, never inside one.
@@ -249,6 +249,7 @@ export function createToolbar(el: HTMLElement, opts: {
     fillFly.hidden = true;
     sync();
     opts.onChange();
+    opts.onRestyle?.({ fill: c }); // fills the selected shape too
   }
   fillBtn.onclick = () => { if (fillFly.hidden) open(fillFly); else fillFly.hidden = true; };
   hoverable(fillSlot, fillFly);

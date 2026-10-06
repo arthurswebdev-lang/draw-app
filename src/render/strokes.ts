@@ -1,9 +1,10 @@
-import { Camera, IconItem, isIcon, isShape, Item, ShapeItem, Stroke, STRIDE } from '../types';
+import { Camera, IconItem, isIcon, isShape, Item, Selectable, ShapeItem, Stroke, STRIDE } from '../types';
 import { intersects } from '../geometry/bbox';
 import { polyline, smooth, toPath2D } from '../geometry/smooth';
 import { iconDef } from '../icons/library';
-import { hitIcon, iconHandles } from '../geometry/icon';
-import { buildShapePath } from '../geometry/shape';
+import { hitIcon } from '../geometry/icon';
+import { buildShapePath, shapeTouches } from '../geometry/shape';
+import { boxHandles, handlesFor, selectionBox } from '../geometry/selection';
 import { Guide } from '../geometry/guides';
 
 export class Renderer {
@@ -25,7 +26,7 @@ export class Renderer {
   /** Keyed by icon *kind*: every lamp on the board shares one set of paths. */
   private iconCache = new Map<string, Path2D[]>();
   /** Drawn on top of everything, and owned by the select tool. */
-  selection: IconItem | null = null;
+  selection: Selectable | null = null;
   private raf = 0;
   private strokesCtx: CanvasRenderingContext2D;
   private liveCtx: CanvasRenderingContext2D;
@@ -133,12 +134,21 @@ export class Renderer {
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
     ctx.lineWidth = s.size;
+    const turned = !!s.rotation && (s.shape === 'rect' || s.shape === 'ellipse');
+    if (turned) {
+      // Built upright, then turned about its own centre.
+      ctx.save();
+      ctx.translate((s.pts[0] + s.pts[2]) / 2, (s.pts[1] + s.pts[3]) / 2);
+      ctx.rotate(s.rotation!);
+      ctx.translate(-(s.pts[0] + s.pts[2]) / 2, -(s.pts[1] + s.pts[3]) / 2);
+    }
     if (s.fill && s.shape !== 'line' && s.shape !== 'polyline') {
       ctx.fillStyle = s.fill;
       ctx.fill(path);
     }
     ctx.strokeStyle = s.color;
     ctx.stroke(path);
+    if (turned) ctx.restore();
   }
 
   private drawItem(ctx: CanvasRenderingContext2D, i: Item) {
@@ -218,20 +228,24 @@ export class Renderer {
    * the items and never cached — it is chrome, not part of the drawing, and it
    * must not end up in an export or under another icon.
    */
-  private drawSelection(ctx: CanvasRenderingContext2D, i: IconItem) {
+  private drawSelection(ctx: CanvasRenderingContext2D, i: Selectable) {
     const z = this.camera.zoom;
-    const { corners, anchor, rotate } = iconHandles(i, z);
+    const { corners, anchor, rotate, vertices, box } = handlesFor(i, z);
 
     ctx.save();
     ctx.strokeStyle = '#1971c2';
     ctx.fillStyle = '#ffffff';
     ctx.lineWidth = 1.5 / z;
     ctx.setLineDash([5 / z, 4 / z]);
-    ctx.beginPath();
-    ctx.moveTo(corners[0].x, corners[0].y);
-    for (const c of corners.slice(1)) ctx.lineTo(c.x, c.y);
-    ctx.closePath();
-    ctx.stroke();
+    if (box) {
+      // The dashed frame. A bare line has none: its two end dots are the handles.
+      const [c0, ...rest] = boxHandles(selectionBox(i), z).corners;
+      ctx.beginPath();
+      ctx.moveTo(c0.x, c0.y);
+      for (const c of rest) ctx.lineTo(c.x, c.y);
+      ctx.closePath();
+      ctx.stroke();
+    }
 
     ctx.setLineDash([]);
     ctx.beginPath();
@@ -244,6 +258,13 @@ export class Renderer {
     for (const c of corners) {
       ctx.beginPath();
       ctx.rect(c.x - r, c.y - r, r * 2, r * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+    // A dot on each vertex of a line, polygon or open path: drag one to reshape it.
+    for (const v of vertices) {
+      ctx.beginPath();
+      ctx.arc(v.x, v.y, r, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
     }
@@ -282,19 +303,37 @@ export class Renderer {
   }
 
   /** Replaces an icon in place, for a drag in progress. No history, no store. */
-  replaceIcon(next: IconItem) {
+  replaceItem(next: Selectable) {
+    // The saved outline belongs to the old geometry; drawing from it would show the
+    // shape where it used to be.
+    this.cache.delete(next.id);
     const at = this.items.findIndex(i => i.id === next.id);
     if (at !== -1) this.items[at] = next;
     this.selection = next;
     this.requestRedraw();
   }
 
-  select(i: IconItem | null) {
+  select(i: Selectable | null) {
     this.selection = i;
     this.requestRedraw();
   }
 
   /** The topmost icon under a world point, so a tap picks what is visibly on top. */
+  /**
+   * The topmost icon or shape under a world point. A shape counts where it is
+   * drawn: on its outline, and inside it only when it is filled, so an empty
+   * rectangle can be picked by its edge and drawn inside without grabbing it.
+   */
+  selectableAt(wx: number, wy: number, pad = 0): Selectable | null {
+    const p = { x: wx, y: wy };
+    for (let n = this.items.length - 1; n >= 0; n -= 1) {
+      const i = this.items[n];
+      if (isIcon(i) && hitIcon(i, wx, wy, pad)) return i;
+      if (isShape(i) && shapeTouches(i, p, p, pad)) return i;
+    }
+    return null;
+  }
+
   iconAt(wx: number, wy: number, pad = 0): IconItem | null {
     for (let n = this.items.length - 1; n >= 0; n -= 1) {
       const i = this.items[n];

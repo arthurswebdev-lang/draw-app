@@ -59,6 +59,12 @@ export type ShapeItem = {
   fill: string | null;
   /** Outline width in world units. */
   size: number;
+  /**
+   * Turn in radians about the centre, for a rectangle or oval, whose `pts` stay
+   * the upright box. Lines and polygons are turned by moving their points instead,
+   * so they never need this.
+   */
+  rotation?: number;
   bbox: BBox;
   createdAt: number;
 };
@@ -68,6 +74,9 @@ export type Item = Stroke | IconItem | ShapeItem;
 
 export const isIcon = (i: Item): i is IconItem => 'kind' in i;
 export const isShape = (i: Item): i is ShapeItem => 'shape' in i;
+
+/** What the select tool can pick up. Pen strokes cannot be: they are edited with the eraser. */
+export type Selectable = IconItem | ShapeItem;
 
 export type Tool =
   | 'pen' | 'eraser' | 'stroke-eraser' | 'select'

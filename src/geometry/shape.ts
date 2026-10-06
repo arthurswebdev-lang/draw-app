@@ -14,6 +14,22 @@ export function shapeBBox(pts: number[], size: number): BBox {
   return { minX: minX - r, minY: minY - r, maxX: maxX + r, maxY: maxY + r };
 }
 
+/** Bounds of a whole shape, allowing for a turned rectangle or oval and the line width. */
+export function shapeItemBBox(s: ShapeItem): BBox {
+  const r = s.rotation ?? 0;
+  if (r && (s.shape === 'rect' || s.shape === 'ellipse')) {
+    const q = s.pts;
+    const hw = Math.abs(q[2] - q[0]) / 2, hh = Math.abs(q[3] - q[1]) / 2;
+    const cx = (q[0] + q[2]) / 2, cy = (q[1] + q[3]) / 2;
+    const c = Math.cos(r), sn = Math.sin(r);
+    const ex = s.shape === 'rect' ? hw * Math.abs(c) + hh * Math.abs(sn) : Math.hypot(hw * c, hh * sn);
+    const ey = s.shape === 'rect' ? hw * Math.abs(sn) + hh * Math.abs(c) : Math.hypot(hw * sn, hh * c);
+    const pad = s.size / 2;
+    return { minX: cx - ex - pad, minY: cy - ey - pad, maxX: cx + ex + pad, maxY: cy + ey + pad };
+  }
+  return shapeBBox(s.pts, s.size);
+}
+
 /** The outline as a Path2D, for drawing. */
 export function buildShapePath(s: Shapeish): Path2D {
   const p = new Path2D();
@@ -34,11 +50,28 @@ export function buildShapePath(s: Shapeish): Path2D {
   return p;
 }
 
+/** Turns [x, y, x, y, ...] about (cx, cy). */
+function turnAbout(xy: number[], cx: number, cy: number, a: number): number[] {
+  if (!a) return xy;
+  const c = Math.cos(a), s = Math.sin(a);
+  const out: number[] = [];
+  for (let i = 0; i < xy.length; i += 2) {
+    const dx = xy[i] - cx, dy = xy[i + 1] - cy;
+    out.push(cx + dx * c - dy * s, cy + dx * s + dy * c);
+  }
+  return out;
+}
+
 /** The outline as straight segments [x, y, x, y, ...], closed shapes ending where they began. */
-export function shapeCenterline(s: Shapeish): number[] {
+export function shapeCenterline(s: Shapeish & { rotation?: number }): number[] {
   const q = s.pts;
   if (s.shape === 'line' || s.shape === 'polyline') return [...q];
   if (s.shape === 'polygon') return [...q, q[0], q[1]];
+  if (s.rotation) {
+    // A turned rectangle or oval: build it upright, then turn it about its centre.
+    const upright = shapeCenterline({ shape: s.shape, pts: s.pts });
+    return turnAbout(upright, (q[0] + q[2]) / 2, (q[1] + q[3]) / 2, s.rotation);
+  }
   if (s.shape === 'rect') {
     const [x0, y0, x1, y1] = q;
     return [x0, y0, x1, y0, x1, y1, x0, y1, x0, y0];
@@ -56,8 +89,13 @@ export function shapeCenterline(s: Shapeish): number[] {
   return out;
 }
 
-export function pointInShape(s: Shapeish, x: number, y: number): boolean {
+export function pointInShape(s: Shapeish & { rotation?: number }, x: number, y: number): boolean {
   const q = s.pts;
+  if (s.rotation && (s.shape === 'rect' || s.shape === 'ellipse')) {
+    // Turn the point the opposite way and test against the upright shape.
+    const [rx, ry] = turnAbout([x, y], (q[0] + q[2]) / 2, (q[1] + q[3]) / 2, -s.rotation);
+    return pointInShape({ shape: s.shape, pts: s.pts }, rx, ry);
+  }
   if (s.shape === 'rect') {
     return x >= Math.min(q[0], q[2]) && x <= Math.max(q[0], q[2])
       && y >= Math.min(q[1], q[3]) && y <= Math.max(q[1], q[3]);
