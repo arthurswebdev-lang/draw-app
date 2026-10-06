@@ -25,7 +25,7 @@ async function main() {
   const history = new History();
   const settings: ToolSettings = {
     tool: 'pen', color: '#1e1e1e', size: 4, eraserSize: 24,
-    fill: null, lastEraser: 'eraser', lastShape: 'rect', sizes: {},
+    fill: null, lastEraser: 'eraser', lastShape: 'rect', magnet: true, sizes: {},
   };
   const isEraserTool = (t: Tool) => t === 'eraser' || t === 'stroke-eraser';
   const defaultSize = (t: Tool) => (isEraserTool(t) ? 24 : 4);

@@ -31,6 +31,7 @@ const CAPTIONS: Record<Tool, string> = {
   rect: 'Rect', ellipse: 'Oval', line: 'Line', polygon: 'Polygon',
 };
 
+const MAGNET_ICON = svg('<path d="M6 3v10a6 6 0 0 0 12 0V3"/><path d="M6 8h4M14 8h4"/><path class="slash" d="M3 3l18 18"/>');
 const LIBRARY_ICON = svg('<rect x="3" y="3" width="7" height="7" rx="1"/><circle cx="17.5" cy="6.5" r="3.5"/><path d="M3 21l3.5-7L10 21z"/><rect x="14" y="14" width="7" height="7" rx="1"/>');
 
 /** A toolbar button that stands for several tools, and shows the one in use. */
@@ -146,6 +147,11 @@ export function createToolbar(el: HTMLElement, opts: {
     return b;
   };
 
+  const magnetBtn = document.createElement('button');
+  magnetBtn.className = 'magnetbtn';
+  magnetBtn.innerHTML = `${MAGNET_ICON}<span class="cap">Magnet</span><span class="pill"></span>`;
+  const magnetPill = magnetBtn.querySelector<HTMLElement>('.pill')!;
+
   const slotEls = new Map<string, { def: SlotDef; main: HTMLButtonElement; fly: HTMLElement }>();
   toolBox.appendChild(plain('pen'));
   for (const def of SLOTS) {
@@ -156,6 +162,8 @@ export function createToolbar(el: HTMLElement, opts: {
     const fly = document.createElement('div');
     fly.className = 'flyout';
     fly.hidden = true;
+    const row = def.id === 'shapes' ? document.createElement('div') : fly;
+    if (row !== fly) { row.className = 'flyrow'; fly.classList.add('tworow'); fly.appendChild(row); }
     for (const t of def.tools) {
       const b = toolButton(t);
       b.onclick = () => {
@@ -165,7 +173,12 @@ export function createToolbar(el: HTMLElement, opts: {
         sync();
         opts.onChange();
       };
-      fly.appendChild(b);
+      row.appendChild(b);
+    }
+    if (def.id === 'shapes') {
+      // Stays open on click, so the change is visible; never touches the active tool.
+      magnetBtn.onclick = () => { settings.magnet = !settings.magnet; sync(); opts.onChange(); };
+      fly.appendChild(magnetBtn);
     }
     main.onclick = () => {
       if (def.tools.includes(settings.tool)) {
@@ -274,6 +287,11 @@ export function createToolbar(el: HTMLElement, opts: {
     }
     el.querySelectorAll<HTMLElement>('.tool[data-tool]').forEach(b =>
       b.classList.toggle('active', b.dataset.tool === settings.tool));
+
+    magnetBtn.classList.toggle('on', settings.magnet);
+    magnetBtn.setAttribute('aria-pressed', String(settings.magnet));
+    magnetBtn.title = `Magnet: snaps squares, circles and angles (${settings.magnet ? 'on' : 'off'})`;
+    magnetPill.textContent = settings.magnet ? 'ON' : 'OFF';
 
     fillBtn.style.setProperty('--fill', settings.fill ?? '#fff');
     fillBtn.classList.toggle('nofill', settings.fill === null);

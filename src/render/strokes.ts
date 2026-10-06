@@ -4,6 +4,7 @@ import { polyline, smooth, toPath2D } from '../geometry/smooth';
 import { iconDef } from '../icons/library';
 import { hitIcon, iconHandles } from '../geometry/icon';
 import { buildShapePath } from '../geometry/shape';
+import { Guide } from '../geometry/guides';
 
 export class Renderer {
   /** Pen marks and icons in one list, ordered by `createdAt` so they layer as drawn. */
@@ -284,14 +285,19 @@ export class Renderer {
   }
 
   // ---- shape being drawn ----
-  private draft: { item: ShapeItem | null; markers: { x: number; y: number }[]; ring: { x: number; y: number } | null } | null = null;
+  private draft: { item: ShapeItem | null; markers: { x: number; y: number }[]; ring: { x: number; y: number } | null; guide: Guide | null } | null = null;
 
   /**
    * The shape under construction. `markers` are dots at placed polygon vertices;
    * `ring` is the circle that shows the next click will close the polygon.
    */
-  setDraft(item: ShapeItem | null, markers: { x: number; y: number }[] = [], ring: { x: number; y: number } | null = null) {
-    this.draft = item || markers.length || ring ? { item, markers, ring } : null;
+  setDraft(
+    item: ShapeItem | null,
+    markers: { x: number; y: number }[] = [],
+    ring: { x: number; y: number } | null = null,
+    guide: Guide | null = null,
+  ) {
+    this.draft = item || markers.length || ring ? { item, markers, ring, guide } : null;
     if (!this.liveRaf) {
       this.liveRaf = requestAnimationFrame(() => { this.liveRaf = 0; this.redrawLive(); });
     }
@@ -315,6 +321,7 @@ export class Renderer {
       ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
       ctx.fill();
     }
+    if (d.guide) this.drawGuide(ctx, d.guide, at);
     if (d.ring) {
       const p = at(d.ring);
       ctx.beginPath();
@@ -324,6 +331,60 @@ export class Renderer {
       ctx.lineWidth = 2;
       ctx.strokeStyle = '#1971c2';
       ctx.stroke();
+    }
+  }
+
+  /**
+   * Measuring guides: thin cyan lines, angle arcs and small labels, all in screen
+   * pixels so they stay readable at any zoom. They turn green when the shape is
+   * exactly square, round, or on a 15 degree step, so a snap is easy to see.
+   */
+  private drawGuide(ctx: CanvasRenderingContext2D, g: Guide, at: (p: { x: number; y: number }) => { x: number; y: number }) {
+    const line = g.exact ? 'rgba(18, 184, 134, 0.9)' : 'rgba(21, 170, 191, 0.85)';
+    const ink = g.exact ? '#087f5b' : '#0b7285';
+    ctx.lineCap = 'butt';
+    ctx.lineWidth = 1.25;
+    ctx.strokeStyle = line;
+    ctx.setLineDash([]);
+    for (const [x1, y1, x2, y2] of g.solid) {
+      const a = at({ x: x1, y: y1 }), b = at({ x: x2, y: y2 });
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    }
+    ctx.setLineDash([4, 3]);
+    ctx.globalAlpha = 0.7;
+    for (const [x1, y1, x2, y2] of g.dashed) {
+      const a = at({ x: x1, y: y1 }), b = at({ x: x2, y: y2 });
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    ctx.setLineDash([]);
+    ctx.lineWidth = 1.75;
+    for (const a of g.arcs) {
+      const p = at(a);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, a.r, a.a0, a.a0 + a.sweep, a.sweep < 0);
+      ctx.stroke();
+    }
+    ctx.font = '600 11px -apple-system, system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (const l of g.labels) {
+      const p = at(l);
+      const x = p.x + l.dx, y = p.y + l.dy;
+      const w = ctx.measureText(l.text).width + 10, h = 16;
+      ctx.beginPath();
+      ctx.moveTo(x - w / 2 + 5, y - h / 2);
+      ctx.arcTo(x + w / 2, y - h / 2, x + w / 2, y + h / 2, 5);
+      ctx.arcTo(x + w / 2, y + h / 2, x - w / 2, y + h / 2, 5);
+      ctx.arcTo(x - w / 2, y + h / 2, x - w / 2, y - h / 2, 5);
+      ctx.arcTo(x - w / 2, y - h / 2, x + w / 2, y - h / 2, 5);
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
+      ctx.fill();
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = ink;
+      ctx.fillText(l.text, x, y + 0.5);
     }
   }
 

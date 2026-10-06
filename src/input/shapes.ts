@@ -1,4 +1,5 @@
 import { screenToWorld } from '../camera';
+import { guidesFor } from '../geometry/guides';
 import { shapeBBox, snapBox, snapLine } from '../geometry/shape';
 import { Renderer } from '../render/strokes';
 import { Change, ShapeItem, ShapeKind, Tool, ToolSettings } from '../types';
@@ -53,6 +54,8 @@ export function attachShapes(opts: {
   let drag: { id: number; start: Pt; shape: ShapeKind; end: Pt } | null = null;
 
   function dragEnd(start: Pt, p: Pt, shape: ShapeKind, shift: boolean): Pt {
+    // With the magnet switched off the drag is free; Shift still forces a snap.
+    if (!opts.getSettings().magnet && !shift) return p;
     const [x, y] = shape === 'line'
       ? snapLine(start.x, start.y, p.x, p.y, shift)
       : snapBox(start.x, start.y, p.x, p.y, 10 / zoom(), shift);
@@ -125,7 +128,8 @@ export function attachShapes(opts: {
   board.addEventListener('pointermove', e => {
     if (drag && e.pointerId === drag.id) {
       drag.end = dragEnd(drag.start, world(e), drag.shape, e.shiftKey);
-      renderer.setDraft(dragItem());
+      const item = dragItem();
+      renderer.setDraft(item, [], null, guidesFor(drag.shape, item.pts, zoom()));
       return;
     }
     if (opts.getSettings().tool !== 'polygon') return;

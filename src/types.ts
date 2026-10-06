@@ -84,6 +84,8 @@ export type ToolSettings = {
   /** Which eraser, and which shape, the toolbar's two grouped buttons show. */
   lastEraser: Tool;
   lastShape: Tool;
+  /** Magnets for shapes: square, circle and 15 degree line snapping. Shift still forces them. */
+  magnet: boolean;
   /**
    * Each tool's own size, so switching tools brings that tool's size back. `size`
    * and `eraserSize` above always hold the size of the tool in hand.

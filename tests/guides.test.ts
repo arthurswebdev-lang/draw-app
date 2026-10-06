@@ -1,0 +1,78 @@
+import { describe, it, expect } from 'vitest';
+import { fmtDeg, guidesFor } from '../src/geometry/guides';
+
+const deg = (r: number) => (r * 180) / Math.PI;
+
+describe('formatting', () => {
+  it('shows whole degrees plainly and others to one decimal', () => {
+    expect(fmtDeg(45)).toBe('45°');
+    expect(fmtDeg(44.98)).toBe('45°');
+    expect(fmtDeg(38.66)).toBe('38.7°');
+  });
+});
+
+describe('rectangle guides', () => {
+  it('shows 45° and 45° for a square, and marks it exact', () => {
+    const g = guidesFor('rect', [0, 0, 100, 100], 1)!;
+    expect(g.exact).toBe(true);
+    const angles = g.labels.filter(l => l.text.endsWith('°')).map(l => l.text);
+    expect(angles).toEqual(['45°', '45°']);
+    expect(g.labels.some(l => l.text === 'square')).toBe(true);
+    expect(g.solid).toEqual([[0, 0, 100, 100]]);
+  });
+  it('gives two angles that add up to 90 for an oblong', () => {
+    const g = guidesFor('rect', [0, 0, 200, 100], 1)!;
+    expect(g.exact).toBe(false);
+    const [a, b] = g.arcs.map(x => Math.abs(deg(x.sweep)));
+    expect(a + b).toBeCloseTo(90, 9);
+    expect(a).toBeCloseTo(26.565, 2);
+    expect(g.labels.some(l => l.text === 'square')).toBe(false);
+  });
+  it('uses the top-left corner however the rectangle was dragged', () => {
+    const g = guidesFor('rect', [200, 100, 0, 0], 1)!;
+    expect(g.arcs[0].x).toBe(0);
+    expect(g.arcs[0].y).toBe(0);
+  });
+  it('skips guides for a rectangle too small to read them', () => {
+    expect(guidesFor('rect', [0, 0, 4, 4], 1)).toBeNull();
+  });
+});
+
+describe('oval guides', () => {
+  it('shows width and height for an oval', () => {
+    const g = guidesFor('ellipse', [0, 0, 200, 100], 1)!;
+    expect(g.exact).toBe(false);
+    expect(g.labels.map(l => l.text)).toEqual(['W 200', 'H 100']);
+    expect(g.solid.length).toBe(2); // the two axes
+  });
+  it('shows the diameter of a circle and marks it exact', () => {
+    const g = guidesFor('ellipse', [0, 0, 120, 120], 1)!;
+    expect(g.exact).toBe(true);
+    expect(g.labels.map(l => l.text)).toEqual(['⌀ 120', 'circle']);
+  });
+});
+
+describe('line guides', () => {
+  it('reports the angle to the horizontal and to the vertical', () => {
+    const g = guidesFor('line', [0, 0, 100, 100 * Math.tan((30 * Math.PI) / 180)], 1)!;
+    const angles = g.labels.filter(l => l.text.endsWith('°')).map(l => l.text);
+    expect(angles).toEqual(['30°', '60°']);
+    expect(g.exact).toBe(true); // 30° is on a 15° step
+  });
+  it('is not exact off the steps', () => {
+    expect(guidesFor('line', [0, 0, 100, 20], 1)!.exact).toBe(false);
+  });
+  it('measures from the start whichever way the line points', () => {
+    const g = guidesFor('line', [100, 100, 0, 0], 1)!; // up and to the left
+    const angles = g.labels.filter(l => l.text.endsWith('°')).map(l => l.text);
+    expect(angles).toEqual(['45°', '45°']);
+    expect(g.arcs[0].x).toBe(100);
+  });
+  it('labels the length', () => {
+    const g = guidesFor('line', [0, 0, 30, 40], 1)!;
+    expect(g.labels.some(l => l.text === '50')).toBe(true);
+  });
+  it('has nothing to say about a polygon', () => {
+    expect(guidesFor('polygon', [0, 0, 10, 0, 5, 8], 1)).toBeNull();
+  });
+});
