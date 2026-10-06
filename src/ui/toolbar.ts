@@ -32,6 +32,8 @@ const CAPTIONS: Record<Tool, string> = {
 };
 
 const MAGNET_ICON = svg('<path d="M6 3v10a6 6 0 0 0 12 0V3"/><path d="M6 8h4M14 8h4"/><path class="slash" d="M3 3l18 18"/>');
+const SHARE_ICON = svg('<path d="M12 15V3"/><path d="m7 8 5-5 5 5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/>');
+const NEW_ICON = svg('<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 11v6M9 14h6"/>');
 const LIBRARY_ICON = svg('<rect x="3" y="3" width="7" height="7" rx="1"/><circle cx="17.5" cy="6.5" r="3.5"/><path d="M3 21l3.5-7L10 21z"/><rect x="14" y="14" width="7" height="7" rx="1"/>');
 
 /** A toolbar button that stands for several tools, and shows the one in use. */
@@ -50,6 +52,8 @@ export function createToolbar(el: HTMLElement, opts: {
   /** Zoom in or out by this factor, about the middle of the screen. */
   onZoomBy: (factor: number) => void;
   onIcons: () => void;
+  onShare: () => void;
+  onNew: () => void;
   /** The colour or line size was picked: restyle the selected icon, if any. */
   onRestyle?: (patch: { color?: string; size?: number }) => void;
 }) {
@@ -73,6 +77,8 @@ export function createToolbar(el: HTMLElement, opts: {
     </div>
     <div class="grp actions">
       <button id="icons" title="Icon library (I)" aria-label="Icon library">${LIBRARY_ICON}</button>
+      <button id="share" title="Share or save as PNG" aria-label="Share or save as PNG">${SHARE_ICON}</button>
+      <button id="new" title="New drawing" aria-label="New drawing">${NEW_ICON}</button>
       <button id="undo" title="Undo (Cmd/Ctrl+Z)" aria-label="Undo">↶</button>
       <button id="redo" title="Redo (Shift+Cmd/Ctrl+Z)" aria-label="Redo">↷</button>
       <button id="zoomout" title="Zoom out" aria-label="Zoom out">−</button>
@@ -255,6 +261,9 @@ export function createToolbar(el: HTMLElement, opts: {
     if (!isEraser()) opts.onRestyle?.({ size: v });
   };
   icons.onclick = opts.onIcons;
+  q('#share').onclick = () => opts.onShare();
+  q('#new').onclick = () => opts.onNew();
+  let zoomNow = 1;
   undo.onclick = opts.onUndo;
   redo.onclick = opts.onRedo;
   zoom.onclick = opts.onZoomReset;
@@ -269,7 +278,8 @@ export function createToolbar(el: HTMLElement, opts: {
     size.min = pen ? '1' : '4';
     size.max = pen ? '40' : '120';
     size.value = String(pen ? settings.size : settings.eraserSize);
-    const px = Math.min(pen ? settings.size : settings.eraserSize, 40);
+    // Line sizes are world units, so the chip shows them as they look at this zoom.
+    const px = pen ? Math.min(40, Math.max(2, settings.size * zoomNow)) : Math.min(settings.eraserSize, 40);
     dot.style.width = dot.style.height = `${px}px`;
     dot.style.background = pen ? settings.color : 'transparent';
     dot.style.border = pen ? 'none' : '1.5px solid #495057';
@@ -303,7 +313,7 @@ export function createToolbar(el: HTMLElement, opts: {
   return {
     sync,
     setHistory(canUndo: boolean, canRedo: boolean) { undo.disabled = !canUndo; redo.disabled = !canRedo; },
-    setZoom(z: number) { zoom.textContent = `${Math.round(z * 100)}%`; },
+    setZoom(z: number) { zoomNow = z; zoom.textContent = `${Math.round(z * 100)}%`; sync(); },
     setIconsOpen(open: boolean) { icons.classList.toggle('open', open); },
   };
 }

@@ -1,5 +1,5 @@
 import { screenToWorld } from '../camera';
-import { HANDLE_HIT, iconBBox, iconHandles, MIN_ICON } from '../geometry/icon';
+import { HANDLE_HIT, iconBBox, iconHandles, MIN_ICON, snapRotation } from '../geometry/icon';
 import { Renderer } from '../render/strokes';
 import { Change, IconItem, ToolSettings } from '../types';
 
@@ -129,11 +129,17 @@ export function attachSelect(opts: {
     if (!mode || !original) return;
     const p = world(e);
     let next: IconItem;
+    let angleNow = { snapped: false, degrees: 0 };
 
     if (mode === 'move') {
       next = { ...original, x: p.x - grabbed.x, y: p.y - grabbed.y };
     } else if (mode === 'rotate') {
-      next = { ...original, rotation: original.rotation + (Math.atan2(p.y - original.y, p.x - original.x) - startAngle) };
+      let rotation = original.rotation + (Math.atan2(p.y - original.y, p.x - original.x) - startAngle);
+      const force = e.shiftKey;
+      const snap = snapRotation(rotation, force);
+      if (opts.getSettings().magnet || force) rotation = snap.rotation;
+      next = { ...original, rotation };
+      angleNow = (opts.getSettings().magnet || force) ? snap : { ...snap, snapped: false };
     } else {
       // Scaled by how much further the finger is from the centre than the corner
       // it grabbed, so the corner stays under the finger whatever the rotation.
@@ -143,11 +149,20 @@ export function attachSelect(opts: {
 
     next.bbox = iconBBox(next);
     renderer.replaceIcon(next);
+    if (mode === 'rotate') {
+      const handle = iconHandles(next, renderer.camera.zoom).rotate;
+      renderer.setDraft(null, [], null, {
+        solid: [], dashed: [], arcs: [], // Green on any exact step, whether the magnet just pulled it there or not.
+        exact: angleNow.snapped || Math.abs(angleNow.degrees / 15 - Math.round(angleNow.degrees / 15)) < 1e-6,
+        labels: [{ x: handle.x, y: handle.y, dx: 34, dy: 0, text: `${angleNow.degrees}°` }],
+      });
+    }
   });
 
   const finish = () => {
     if (!mode || !original) return;
     const next = renderer.selection;
+    if (mode === 'rotate') renderer.setDraft(null);
     mode = null;
     const before = original;
     original = null;
@@ -175,6 +190,7 @@ export function attachSelect(opts: {
   board.addEventListener('abort-gesture', () => {
     if (!mode || !original) return;
     const before = original;
+    if (mode === 'rotate') renderer.setDraft(null);
     mode = null;
     original = null;
     if (placing) {
@@ -193,7 +209,7 @@ export function attachSelect(opts: {
       id: crypto.randomUUID(),
       kind,
       color: s.color,
-      size: s.size / renderer.camera.zoom,
+      size: s.size, // world units, like the pen
       x, y,
       // A fixed size on screen, so an icon arrives the size it looks in the
       // panel however far the board is zoomed.

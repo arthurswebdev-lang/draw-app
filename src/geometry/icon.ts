@@ -55,3 +55,23 @@ export function iconHandles(i: IconItem, zoom: number) {
     rotate: { x: i.x + out.x, y: i.y + out.y },
   };
 }
+
+/**
+ * Magnet for turning: pulls an angle onto a nearby step.
+ * Within 6 degrees of a multiple of 45 it snaps there; otherwise within 3 degrees
+ * of a multiple of 15. `force` always snaps to the nearest multiple of 15.
+ * The result keeps the same full turn as the input.
+ */
+export function snapRotation(rotation: number, force = false): { rotation: number; snapped: boolean; degrees: number } {
+  const deg = (rotation * 180) / Math.PI;
+  const norm = ((deg % 360) + 360) % 360;
+  const near = (step: number) => Math.round(norm / step) * step;
+  let target = norm;
+  if (Math.abs(norm - near(45)) <= 6) target = near(45);
+  else if (Math.abs(norm - near(15)) <= 3) target = near(15);
+  else if (force) target = near(15);
+  const snapped = target !== norm;
+  const out = snapped ? rotation + ((target - norm) * Math.PI) / 180 : rotation;
+  const degrees = Math.round((((target % 360) + 360) % 360) * 10) / 10 % 360;
+  return { rotation: out, snapped, degrees };
+}

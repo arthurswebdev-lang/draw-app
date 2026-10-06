@@ -34,7 +34,9 @@ export function attachPen(opts: {
     board.setPointerCapture(e.pointerId);
     const pen = getSettings();
     color = pen.color;
-    size = pen.size / renderer.camera.zoom;
+    // World units, not screen pixels: the same pen size draws the same thickness at
+    // every zoom, so a drawing keeps its proportions when you zoom in to add detail.
+    size = pen.size;
     pts = [];
     pushEvent(e);
     renderer.setLive(new Float32Array(pts), color, size);

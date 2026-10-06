@@ -11,6 +11,8 @@ import { attachShapes } from './input/shapes';
 import { zoomAt } from './camera';
 import { createToolbar } from './ui/toolbar';
 import { createIconsPanel } from './ui/icons-panel';
+import { exportPng, shareOrSave } from './export/png';
+import { confirmNew } from './ui/modal';
 import { History } from './state/history';
 import { iconDef } from './icons/library';
 import { Camera, Change, Tool, ToolSettings } from './types';
@@ -61,10 +63,12 @@ async function main() {
     onZoomBy: f => setCamera(zoomAt(renderer.camera, window.innerWidth / 2, window.innerHeight / 2, f)),
     onZoomReset: () => setCamera(zoomAt(renderer.camera, window.innerWidth / 2, window.innerHeight / 2, 1 / renderer.camera.zoom)),
     onIcons: () => { toolbar.setIconsOpen(panel.toggle()); },
+    onShare: () => { void shareFlow(); },
+    onNew: () => { void newFlow(); },
     // The colours and line size also restyle the selected icon.
     onRestyle: patch => {
       if (settings.tool !== 'select') return;
-      select?.restyle(patch.size === undefined ? patch : { size: patch.size / renderer.camera.zoom });
+      select?.restyle(patch);
     },
   });
 
@@ -105,6 +109,39 @@ async function main() {
     panel.refresh();
   };
   applyTool();
+  let toastTimer = 0;
+  const toast = (msg: string) => {
+    hint.textContent = msg;
+    hint.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = window.setTimeout(() => { hint.hidden = true; }, 2000);
+  };
+  async function shareFlow() {
+    if (renderer.items.length === 0) { toast('Nothing to share yet'); return; }
+    try {
+      const blob = await exportPng(renderer);
+      if (!blob) { toast('Nothing to share yet'); return; }
+      await shareOrSave(blob);
+    } catch (err) {
+      console.error(err);
+      toast('Could not save the picture');
+    }
+  }
+  async function newFlow() {
+    shapes?.cancel();
+    if (renderer.items.length === 0) { setCamera({ x: 0, y: 0, zoom: 1 }); return; }
+    select?.flush();
+    const ok = await confirmNew({ onSaveCopy: shareFlow });
+    if (!ok) return;
+    const change = { removed: [...renderer.items], added: [] as typeof renderer.items };
+    select?.clear();
+    shapes?.cancel();
+    renderer.applyChange(change.removed, []);
+    history.push(change);
+    refreshHistory();
+    guard(store.applyChange(change.removed, change.added));
+    setCamera({ x: 0, y: 0, zoom: 1 });
+  }
   const refreshHistory = () => toolbar.setHistory(history.canUndo, history.canRedo);
 
   const setCamera = (c: Camera) => {

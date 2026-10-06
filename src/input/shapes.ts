@@ -36,7 +36,7 @@ export function attachShapes(opts: {
 
   function make(shape: ShapeKind, pts: number[]): ShapeItem {
     const s = opts.getSettings();
-    const size = s.size / zoom();
+    const size = s.size; // world units, like the pen: same setting, same thickness at any zoom
     const closed = shape === 'rect' || shape === 'ellipse' || shape === 'polygon';
     return {
       id: crypto.randomUUID(), shape, pts,

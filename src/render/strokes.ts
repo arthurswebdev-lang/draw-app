@@ -156,6 +156,36 @@ export class Renderer {
     return p;
   }
 
+  /**
+   * Draws every committed item onto a new white canvas, fitted to the drawing.
+   * No selection, no live draft, and the on-screen camera is not touched.
+   */
+  exportCanvas(opts: { scale?: number; pad?: number; maxSide?: number } = {}): HTMLCanvasElement | null {
+    if (this.items.length === 0) return null;
+    const pad = opts.pad ?? 32;
+    const maxSide = opts.maxSide ?? 4096;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const i of this.items) {
+      minX = Math.min(minX, i.bbox.minX); minY = Math.min(minY, i.bbox.minY);
+      maxX = Math.max(maxX, i.bbox.maxX); maxY = Math.max(maxY, i.bbox.maxY);
+    }
+    if (![minX, minY, maxX, maxY].every(Number.isFinite)) return null;
+    const w = maxX - minX + 2 * pad, h = maxY - minY + 2 * pad;
+    const k = Math.min(opts.scale ?? 2, maxSide / Math.max(w, h));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(w * k));
+    canvas.height = Math.max(1, Math.round(h * k));
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.setTransform(k, 0, 0, k, (-minX + pad) * k, (-minY + pad) * k);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    for (const i of this.items) this.drawItem(ctx, i);
+    return canvas;
+  }
+
   /** Request a full redraw of committed strokes (one per frame). */
   requestRedraw() {
     if (this.raf) return;
@@ -297,7 +327,7 @@ export class Renderer {
     ring: { x: number; y: number } | null = null,
     guide: Guide | null = null,
   ) {
-    this.draft = item || markers.length || ring ? { item, markers, ring, guide } : null;
+    this.draft = item || markers.length || ring || guide ? { item, markers, ring, guide } : null;
     if (!this.liveRaf) {
       this.liveRaf = requestAnimationFrame(() => { this.liveRaf = 0; this.redrawLive(); });
     }
