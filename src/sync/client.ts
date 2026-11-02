@@ -25,6 +25,7 @@ type ServerMsg =
   | { type: 'change'; change: WireChange }
   | { type: 'ack' }
   | { type: 'peers'; count: number }
+  | { type: 'pong' }
   | { type: 'live'; from: string; end?: boolean; start?: number; pts?: number[]; color?: string; size?: number };
 
 /**
@@ -90,8 +91,7 @@ export function createSync(opts: {
 
   function connect() {
     clearTimeout(retryTimer);
-    // iOS stops a page in the background anyway; a fresh connection on return is cleaner.
-    if (!url || ws || document.hidden) return;
+    if (!url || ws) return;
     setState('connecting');
     let sock: WebSocket;
     try { sock = new WebSocket(url); }
@@ -120,7 +120,28 @@ export function createSync(opts: {
     };
   }
 
+  /** Asks the server for a pong; no answer soon means the socket is dead: reconnect. */
+  let pingTimer = 0;
+  function check() {
+    const sock = ws;
+    if (!sock || sock.readyState !== WebSocket.OPEN) {
+      if (sock && sock.readyState !== WebSocket.CONNECTING) { disconnect(); connect(); }
+      return;
+    }
+    send({ type: 'ping' });
+    clearTimeout(pingTimer);
+    pingTimer = window.setTimeout(() => {
+      pingTimer = 0;
+      if (ws !== sock) return;
+      disconnect();
+      setState('offline');
+      connect();
+    }, 3000);
+  }
+
   function disconnect() {
+    clearTimeout(pingTimer);
+    pingTimer = 0;
     const sock = ws;
     ws = null;
     synced = false;
@@ -167,6 +188,10 @@ export function createSync(opts: {
         persist();
         emit();
         break;
+      case 'pong':
+        clearTimeout(pingTimer);
+        pingTimer = 0;
+        break;
       case 'peers':
         peers = msg.count;
         emit();
@@ -209,9 +234,14 @@ export function createSync(opts: {
     },
     async start() {
       outbox = (await opts.loadOutbox()) ?? [];
+      // Stay connected while hidden: on a Mac, Safari calls a window "hidden" when
+      // another window covers it, and that window is the one watching the iPad draw.
+      // iOS suspends a background app instead, which can leave a dead socket that
+      // still looks open, so on the way back the connection is checked.
       document.addEventListener('visibilitychange', () => {
-        if (document.hidden) { disconnect(); if (url) setState('offline'); }
-        else { retry = 0; connect(); }
+        if (document.hidden) return;
+        retry = 0;
+        if (!ws) connect(); else check();
       });
       window.addEventListener('online', () => { retry = 0; connect(); });
       emit();

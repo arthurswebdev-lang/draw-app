@@ -107,9 +107,14 @@ const announcePeers = () => {
 };
 
 wss.on('connection', (ws, req) => {
-  const me = { id: randomUUID(), ws, ready: false, alive: true };
+  const ua = req.headers['user-agent'] ?? '';
+  // Which device, for the log. iPadOS Safari says "Macintosh" too; only touch support tells.
+  const name = /iPhone/.test(ua) ? 'iPhone' : /iPad/.test(ua) ? 'iPad'
+    : /Macintosh/.test(ua) && !/^::1$|127\.0\.0\.1$/.test(req.socket.remoteAddress ?? '') ? 'iPad (or another Mac)'
+    : /Macintosh/.test(ua) ? 'this Mac' : 'device';
+  const me = { id: randomUUID(), ws, ready: false, alive: true, name };
   clients.set(ws, me);
-  log('Device connected', req.socket.remoteAddress);
+  log(`${name} connected`, req.socket.remoteAddress);
   ws.on('pong', () => { me.alive = true; });
 
   ws.on('message', raw => {
@@ -130,11 +135,16 @@ wss.on('connection', (ws, req) => {
           want: board.want(Object.keys(have)),
         });
         me.ready = true;
+        log(`${name} synced: sent ${msg.outbox?.length ?? 0} waiting changes, has ${Object.keys(have).length} items, got ${board.diffFor(have).length} items`);
         if (msg.outbox?.length) save();
         announcePeers();
         break;
       }
+      case 'ping':
+        send(ws, { type: 'pong' });
+        break;
       case 'change': {
+        log(`Change from ${name}: +${msg.change?.added?.length ?? 0} -${msg.change?.removed?.length ?? 0}`);
         board.applyChange(msg.change);
         toOthers(ws, { type: 'change', change: msg.change });
         send(ws, { type: 'ack' });
@@ -155,7 +165,7 @@ wss.on('connection', (ws, req) => {
       toOthers(ws, { type: 'live', from: me.id, end: true });
       announcePeers();
     }
-    log('Device left');
+    log(`${name} left`);
   });
   ws.on('error', err => log('Socket error', err.message));
 });

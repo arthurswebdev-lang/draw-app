@@ -16,7 +16,7 @@ const canRun = existsSync('sync-server/node_modules/ws');
 const dataDir = mkdtempSync(join(tmpdir(), 'draw-sync-test-'));
 const wait = (ms: number) => new Promise(r => setTimeout(r, ms));
 const docEvents = new EventTarget();
-const doc = Object.assign(docEvents, { hidden: false });
+const doc = Object.assign(docEvents, { hidden: false }); // never hidden here
 const mem = new Map<string, string>();
 Object.assign(globalThis, {
   window: Object.assign(new EventTarget(), { setTimeout, clearTimeout }),
@@ -54,9 +54,12 @@ const stroke = (id: string, t: number): Stroke => ({
 });
 const ids = (l: Item[]) => l.map(i => i.id).sort();
 
+const startServer = () => {
+  srv = spawn('node', ['sync-server/server.mjs', '--insecure'], { env: { ...process.env, PORT: String(PORT), SYNC_DATA_DIR: dataDir } });
+};
 beforeAll(async () => {
   if (!canRun) return;
-  srv = spawn('node', ['sync-server/server.mjs', '--insecure'], { env: { ...process.env, PORT: String(PORT), SYNC_DATA_DIR: dataDir } });
+  startServer();
   await wait(600);
 });
 afterAll(() => { srv?.kill(); rmSync(dataDir, { recursive: true, force: true }); });
@@ -95,15 +98,15 @@ describe.skipIf(!canRun)('sync end to end (real server)', () => {
     await wait(200);
     expect(ids(A.items)).toEqual(['a-new', 'b-old']);
 
-    // A goes to the background; both change things; A comes back
-    doc.hidden = true;
-    // (one shared document here, so this takes both offline: fine for the test)
-    document.dispatchEvent(new Event('visibilitychange'));
+    // The server goes away (the Mac sleeps); both devices change things; it comes back.
+    srv?.kill();
+    await wait(300);
+    expect(A.s.status.state).toBe('offline');
     A.draw({ removed: [], added: [stroke('a-offline', 30)] });
     B.draw({ removed: [B.items.find(i => i.id === 'b-old')!], added: [] });
-    expect(A.s.status.state).toBe('offline');
-    doc.hidden = false;
-    document.dispatchEvent(new Event('visibilitychange'));
+    startServer();
+    await wait(600);
+    (globalThis.window as EventTarget).dispatchEvent(new Event('online'));
     await wait(600);
     expect(ids(A.items)).toEqual(ids(B.items));
     expect(ids(A.items)).toEqual(['a-new', 'a-offline']);
