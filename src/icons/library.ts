@@ -94,6 +94,17 @@ const ELECTRONICS: IconDef[] = [
 const CYL = ['M24 26c0-6 12-11 26-11s26 5 26 11v48c0 6-12 11-26 11s-26-5-26-11z',
              'M24 26c0 6 12 11 26 11s26-5 26-11'];
 
+/** A circle as path data: centre and radius. */
+const circ = (cx: number, cy: number, r: number) => `M${cx - r} ${cy}a${r} ${r} 0 1 0 ${2 * r} 0a${r} ${r} 0 1 0 ${-2 * r} 0`;
+/** A rounded rectangle as path data. */
+const rr = (x: number, y: number, w: number, h: number, r: number) =>
+  `M${x + r} ${y}h${w - 2 * r}a${r} ${r} 0 0 1 ${r} ${r}v${h - 2 * r}a${r} ${r} 0 0 1 ${-r} ${r}` +
+  `h${-(w - 2 * r)}a${r} ${r} 0 0 1 ${-r} ${-r}v${-(h - 2 * r)}a${r} ${r} 0 0 1 ${r} ${-r}z`;
+/** A page with a folded corner, shared by the file-like icons. */
+const PAGE = ['M26 10h32l18 18v62H26z', 'M58 10v18h18'];
+
+const P = (id: string, label: string, group: string, d: string[]): IconDef => ({ id, label, sphere: 'programming', group, d });
+
 const PROGRAMMING: IconDef[] = [
   { id: 'db', label: 'Database', sphere: 'programming', group: 'Storage',
     d: [...CYL, 'M24 50c0 6 12 11 26 11s26-5 26-11'] },
@@ -131,6 +142,85 @@ const PROGRAMMING: IconDef[] = [
         'M42 16h16', 'M50 80m-3 0a3 3 0 1 0 6 0a3 3 0 1 0-6 0'] },
   { id: 'client-user', label: 'User', sphere: 'programming', group: 'Clients',
     d: ['M50 34m-16 0a16 16 0 1 0 32 0a16 16 0 1 0-32 0', 'M18 90a32 32 0 0 1 64 0'] },
+
+  // Storage
+  P('file', 'File', 'Storage', [...PAGE, 'M36 50h30', 'M36 62h30', 'M36 74h20']),
+  P('json', 'JSON document', 'Storage', [...PAGE,
+    'M44 44c-6 0-6 3-6 8s0 7-5 7c5 0 5 2 5 7s0 8 6 8', 'M58 44c6 0 6 3 6 8s0 7 5 7c-5 0-5 2-5 7s0 8-6 8']),
+  P('folder', 'Folder', 'Storage', ['M10 24h28l8 9h44v49H10z', 'M10 42h80']),
+  P('table', 'Table', 'Storage', [rr(10, 20, 80, 60, 5), 'M10 38h80', 'M10 59h80', 'M37 20v60', 'M63 20v60']),
+  P('search-index', 'Search index', 'Storage', [circ(42, 42, 24), 'M59 59l25 25', 'M30 36h24', 'M30 48h16']),
+  P('event-stream', 'Event stream', 'Storage', ['M10 36h14v28H10z', 'M30 36h14v28H30z', 'M50 36h14v28H50z',
+    'M70 50h18', 'M80 42l8 8-8 8']),
+
+  // Servers
+  P('cloud', 'Cloud', 'Servers', ['M28 74h46a15 15 0 0 0 1-30a22 22 0 0 0-42-4a17 17 0 0 0-5 34z']),
+  P('container', 'Container', 'Servers', ['M50 12l36 17v42L50 88 14 71V29z', 'M14 29l36 17 36-17', 'M50 46v42']),
+  P('function', 'Function', 'Servers', [rr(12, 12, 76, 76, 12), 'M36 26h8l22 48', 'M54 50L38 74']),
+  P('scheduler', 'Scheduler', 'Servers', [circ(50, 52, 34), 'M50 30v22l15 10', 'M30 12l-12 10', 'M70 12l12 10']),
+  P('microservice', 'Microservice', 'Servers', ['M50 12l33 19v38L50 88 17 69V31z', circ(50, 50, 11)]),
+  P('vm', 'Virtual machine', 'Servers', [rr(12, 14, 76, 56, 5), 'M24 26h52v32H24z', 'M42 70l-4 12', 'M58 70l4 12', 'M30 84h40']),
+  P('cluster', 'Cluster', 'Servers', [circ(50, 22, 10), circ(24, 74, 10), circ(76, 74, 10),
+    'M45 31L29 65', 'M55 31l16 34', 'M34 74h32']),
+
+  // Clients
+  P('desktop', 'Desktop', 'Clients', [rr(10, 14, 80, 54, 5), 'M42 68l-4 14', 'M58 68l4 14', 'M30 84h40']),
+  P('laptop', 'Laptop', 'Clients', [rr(20, 20, 60, 42, 4), 'M8 70h84l-6 10H14z']),
+  P('tablet', 'Tablet', 'Clients', [rr(18, 8, 64, 84, 8), circ(50, 82, 3)]),
+  P('users', 'Team', 'Clients', [circ(36, 36, 13), 'M10 84a26 26 0 0 1 52 0', circ(68, 32, 10), 'M62 56a22 22 0 0 1 28 22']),
+  P('bot', 'Bot', 'Clients', [rr(20, 32, 60, 46, 12), circ(38, 54, 6), circ(62, 54, 6), 'M40 68h20',
+    'M50 32V22', circ(50, 16, 5), 'M20 52h-8', 'M80 52h8']),
+  P('chip', 'Device', 'Clients', [rr(28, 28, 44, 44, 4), 'M38 28V16', 'M50 28V16', 'M62 28V16', 'M38 72v12',
+    'M50 72v12', 'M62 72v12', 'M28 38H16', 'M28 50H16', 'M28 62H16', 'M72 38h12', 'M72 50h12', 'M72 62h12']),
+
+  // Network
+  P('internet', 'Internet', 'Network', [circ(50, 50, 36), 'M14 50h72', 'M18 32h64', 'M18 68h64',
+    'M50 14c14 12 14 60 0 72', 'M50 14c-14 12-14 60 0 72']),
+  P('dns', 'DNS', 'Network', ['M50 12v76', 'M50 20h28l8 9-8 9H50', 'M50 46H22l-8 9 8 9h28', 'M34 88h32']),
+  P('router', 'Router', 'Network', [rr(10, 50, 80, 28, 6), 'M30 50L22 22', 'M70 50l8-28', circ(26, 64, 3), circ(40, 64, 3), 'M58 64h18']),
+  P('net-switch', 'Network switch', 'Network', [rr(8, 34, 84, 32, 5), 'M18 50h8', 'M34 50h8', 'M50 50h8', 'M66 50h8', 'M80 50h4']),
+  P('request', 'Request / response', 'Network', ['M14 36h66', 'M68 24l12 12-12 12', 'M86 64H20', 'M32 52L20 64l12 12']),
+  P('email', 'Email', 'Network', [rr(10, 22, 80, 56, 5), 'M12 26l38 30 38-30']),
+  P('notification', 'Notification', 'Network', ['M28 66V46a22 22 0 0 1 44 0v20l8 10H20z', 'M42 80a8 8 0 0 0 16 0', 'M50 16v8']),
+
+  // Security
+  P('lock', 'Lock', 'Security', [rr(22, 44, 56, 44, 6), 'M34 44V32a16 16 0 0 1 32 0v12', circ(50, 62, 5), 'M50 67v9']),
+  P('key', 'Key', 'Security', [circ(28, 50, 16), 'M44 50h44', 'M78 50v12', 'M66 50v10']),
+  P('shield', 'Shield', 'Security', ['M50 10l34 12v26c0 22-14 34-34 42-20-8-34-20-34-42V22z', 'M36 50l10 10 18-20']),
+  P('firewall', 'Firewall', 'Security', ['M10 22h80v56H10z', 'M10 41h80', 'M10 60h80', 'M36 22v19', 'M64 22v19',
+    'M22 41v19', 'M50 41v19', 'M78 41v19', 'M36 60v18', 'M64 60v18']),
+  P('identity', 'Login / identity', 'Security', [rr(8, 22, 84, 56, 6), circ(32, 44, 9), 'M18 68a14 14 0 0 1 28 0',
+    'M56 40h24', 'M56 52h24', 'M56 64h14']),
+  P('secret', 'Secret', 'Security', [rr(14, 30, 72, 40, 8), circ(32, 50, 4), circ(50, 50, 4), circ(68, 50, 4)]),
+
+  // Code
+  P('code', 'Code', 'Code', ['M34 28L12 50l22 22', 'M66 28l22 22-22 22', 'M57 20L43 80']),
+  P('terminal', 'Terminal', 'Code', [rr(8, 16, 84, 68, 6), 'M22 38l14 12-14 12', 'M44 64h22']),
+  P('bug', 'Bug', 'Code', ['M50 32c12 0 19 10 19 26s-9 28-19 28-19-12-19-28 7-26 19-26z', 'M40 33a10 10 0 0 1 20 0',
+    'M50 40v44', 'M31 48H16', 'M31 62H14', 'M33 75l-12 9', 'M69 48h15', 'M69 62h17', 'M67 75l12 9', 'M44 22l-6-8', 'M56 22l6-8']),
+  P('braces', 'Variable / object', 'Code', ['M40 16c-10 0-10 8-10 16s0 14-10 18c10 4 10 10 10 18s0 16 10 16',
+    'M60 16c10 0 10 8 10 16s0 14 10 18c-10 4-10 10-10 18s0 16-10 16']),
+  P('git-branch', 'Branch', 'Code', [circ(30, 18, 8), circ(30, 82, 8), circ(70, 34, 8), 'M30 26v48', 'M70 42v4c0 14-40 10-40 26']),
+  P('merge', 'Merge / pull request', 'Code', [circ(28, 20, 8), circ(28, 80, 8), circ(72, 80, 8), 'M28 28v44',
+    'M72 72V42c0-8-6-14-14-14H44', 'M52 20l-8 8 8 8']),
+  P('commit', 'Commit', 'Code', [circ(50, 50, 13), 'M8 50h29', 'M63 50h29']),
+  P('package', 'Package', 'Code', ['M14 30l36-16 36 16v42L50 88 14 72z', 'M14 30l36 16 36-16', 'M50 46v42', 'M32 22l36 16v14']),
+  P('config', 'Settings', 'Code', ['M14 26h72', 'M14 50h72', 'M14 74h72', circ(34, 26, 7), circ(64, 50, 7), circ(42, 74, 7)]),
+  P('tests', 'Tests passed', 'Code', [circ(50, 50, 36), 'M32 50l13 13 24-26']),
+  P('logs', 'Logs', 'Code', ['M30 24h56', 'M30 41h56', 'M30 58h56', 'M30 75h38', circ(17, 24, 2), circ(17, 41, 2),
+    circ(17, 58, 2), circ(17, 75, 2)]),
+  P('metrics', 'Metrics', 'Code', ['M12 12v76h76', 'M22 70l20-24 14 12 26-30', 'M68 28h14v14']),
+  P('alert', 'Alert', 'Code', ['M50 12l40 72H10z', 'M50 38v22', 'M50 72v1']),
+
+  // Flow (flowchart pieces)
+  P('flow-start', 'Start / end', 'Flow', [rr(8, 32, 84, 36, 18)]),
+  P('flow-process', 'Process', 'Flow', ['M10 30h80v40H10z']),
+  P('flow-decision', 'Decision', 'Flow', ['M50 12l38 38-38 38-38-38z']),
+  P('flow-io', 'Input / output', 'Flow', ['M26 30h64l-16 40H10z']),
+  P('flow-subprocess', 'Subprocess', 'Flow', ['M8 30h84v40H8z', 'M20 30v40', 'M80 30v40']),
+  P('flow-note', 'Note', 'Flow', ['M14 12h54l18 18v58H14z', 'M68 12v18h18', 'M26 46h46', 'M26 60h46', 'M26 74h28']),
+  P('flow-loop', 'Loop', 'Flow', ['M78 50a28 28 0 1 1-8-20', 'M72 14v18H54']),
+  P('flow-arrow', 'Arrow', 'Flow', ['M10 50h76', 'M70 34l16 16-16 16']),
 ];
 
 // ── Water supply ───────────────────────────────────────────────────────────
@@ -202,11 +292,16 @@ function groupsOf(sphere: string): string[] {
   return seen;
 }
 
+/**
+ * What the panel offers: programming only. The electronics and water icons stay
+ * defined above, unlisted, so icons already placed on a board still draw.
+ */
 export const SPHERES: Sphere[] = [
-  { id: 'electronics', label: 'Electronics', groups: groupsOf('electronics') },
   { id: 'programming', label: 'Programming', groups: groupsOf('programming') },
-  { id: 'water', label: 'Water supply', groups: groupsOf('water') },
 ];
+
+/** Spheres kept only so placed icons still draw. Not shown in the panel. */
+export const HIDDEN_SPHERES = ['electronics', 'water'];
 
 export const iconsIn = (sphere: string, group: string): IconDef[] =>
   ICON_DEFS.filter(d => d.sphere === sphere && d.group === group);

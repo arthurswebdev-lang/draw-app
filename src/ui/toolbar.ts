@@ -14,6 +14,7 @@ const ICONS: Record<Tool, string> = {
   ellipse: svg('<ellipse cx="12" cy="12" rx="9" ry="6.5"/>'),
   line: svg('<path d="M5 19 19 5"/>'),
   polygon: svg('<path d="M12 3.5 20 9.5 17 19.5H7L4 9.5z"/>'),
+  text: svg('<path d="M5 6V4.5h14V6"/><path d="M12 4.5v15"/><path d="M9 19.5h6"/>'),
 };
 const TITLES: Record<Tool, string> = {
   pen: 'Pen (P)',
@@ -24,11 +25,12 @@ const TITLES: Record<Tool, string> = {
   ellipse: 'Oval: near a circle it snaps to a circle (O)',
   line: 'Line (L)',
   polygon: 'Polygon: click each corner, return to the first to close (G)',
+  text: 'Text: tap where it goes and type; tap a text to change it (T)',
 };
 // Under each tool, because a finger has no tooltip to read.
 const CAPTIONS: Record<Tool, string> = {
   pen: 'Pen', eraser: 'Eraser', 'stroke-eraser': 'Object', select: 'Select',
-  rect: 'Rect', ellipse: 'Oval', line: 'Line', polygon: 'Polygon',
+  rect: 'Rect', ellipse: 'Oval', line: 'Line', polygon: 'Polygon', text: 'Text',
 };
 
 const MAGNET_ICON = svg('<path d="M6 3v10a6 6 0 0 0 12 0V3"/><path d="M6 8h4M14 8h4"/><path class="slash" d="M3 3l18 18"/>');
@@ -239,6 +241,7 @@ export function createToolbar(el: HTMLElement, opts: {
     toolBox.appendChild(slot);
     slotEls.set(def.id, { def, main, fly });
   }
+  toolBox.appendChild(plain('text'));
   toolBox.appendChild(plain('select'));
 
   // ---- colours ----

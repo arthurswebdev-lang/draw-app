@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { hitIcon, iconBBox, iconCorners, iconHandles } from '../src/geometry/icon';
-import { ICON_DEFS, iconDef, iconsIn, SPHERES } from '../src/icons/library';
+import { HIDDEN_SPHERES, ICON_DEFS, iconDef, iconsIn, SPHERES } from '../src/icons/library';
 import { IconItem } from '../src/types';
 
 const at = (over: Partial<IconItem> = {}): IconItem => ({
@@ -104,12 +104,20 @@ describe('the library', () => {
     }
   });
 
-  it('files every icon under a sphere and a tab that exist', () => {
+  it('files every icon under a sphere and a tab that exist, or under a hidden sphere', () => {
     for (const def of ICON_DEFS) {
+      if (HIDDEN_SPHERES.includes(def.sphere)) continue;
       const sphere = SPHERES.find(s => s.id === def.sphere);
       expect(sphere, `${def.id} has an unknown sphere`).toBeDefined();
       expect(sphere!.groups).toContain(def.group);
     }
+  });
+
+  it('shows only programming icons, and keeps the old ones defined', () => {
+    expect(SPHERES.map(s => s.id)).toEqual(['programming']);
+    expect(ICON_DEFS.some(d => d.id === 'socket')).toBe(true);
+    const ids = ICON_DEFS.map(d => d.id);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 
   it('leaves no tab empty', () => {

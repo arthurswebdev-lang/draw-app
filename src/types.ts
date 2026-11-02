@@ -69,18 +69,41 @@ export type ShapeItem = {
   createdAt: number;
 };
 
-/** Everything the board holds. Pen marks, icons and shapes live in one ordered list. */
-export type Item = Stroke | IconItem | ShapeItem;
+/**
+ * Typed text. Like an icon it is one object turned about its centre: `w` and `h`
+ * are the size of its box in world units, measured when the text was typed, and
+ * the font size is in world units too, so it zooms with the board.
+ */
+export type TextItem = {
+  id: string;
+  text: string;
+  color: string;
+  /** World units. */
+  fontSize: number;
+  /** Centre, in world units. */
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** Clockwise, radians. */
+  rotation: number;
+  bbox: BBox;
+  createdAt: number;
+};
+
+/** Everything the board holds. Pen marks, icons, shapes and text live in one ordered list. */
+export type Item = Stroke | IconItem | ShapeItem | TextItem;
 
 export const isIcon = (i: Item): i is IconItem => 'kind' in i;
 export const isShape = (i: Item): i is ShapeItem => 'shape' in i;
+export const isText = (i: Item): i is TextItem => 'text' in i;
 
 /** What the select tool can pick up. Pen strokes cannot be: they are edited with the eraser. */
-export type Selectable = IconItem | ShapeItem;
+export type Selectable = IconItem | ShapeItem | TextItem;
 
 export type Tool =
   | 'pen' | 'eraser' | 'stroke-eraser' | 'select'
-  | 'line' | 'rect' | 'ellipse' | 'polygon';
+  | 'line' | 'rect' | 'ellipse' | 'polygon' | 'text';
 
 /** Sizes are in screen pixels at the time of use. */
 export type ToolSettings = {

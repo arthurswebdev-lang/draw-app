@@ -8,6 +8,7 @@ import { attachNavigate } from './input/navigate';
 import { attachEraser } from './input/eraser';
 import { attachSelect } from './input/select';
 import { attachShapes } from './input/shapes';
+import { attachText } from './input/text';
 import { zoomAt } from './camera';
 import { createToolbar } from './ui/toolbar';
 import { createIconsPanel } from './ui/icons-panel';
@@ -17,7 +18,7 @@ import { createSync } from './sync/client';
 import { fitView, View, viewOf, WireChange } from './sync/wire';
 import { History } from './state/history';
 import { iconDef } from './icons/library';
-import { Camera, Change, Selectable, Tool, ToolSettings } from './types';
+import { Camera, Change, isText, Selectable, Tool, ToolSettings } from './types';
 import { reorder } from './state/zorder';
 import { pasteCopy } from './state/clipboard';
 
@@ -34,7 +35,8 @@ async function main() {
     fill: null, lastEraser: 'eraser', lastShape: 'rect', magnet: true, sizes: {},
   };
   const isEraserTool = (t: Tool) => t === 'eraser' || t === 'stroke-eraser';
-  const defaultSize = (t: Tool) => (isEraserTool(t) ? 24 : 4);
+  // Text: the size is the font size on screen, divided by 2 (so 12 means 24 px).
+  const defaultSize = (t: Tool) => (isEraserTool(t) ? 24 : t === 'text' ? 12 : 4);
 
   const store = await createStore();
   const savedCam = await store.getMeta<Camera>('camera');
@@ -42,7 +44,7 @@ async function main() {
   if (savedCam) renderer.camera = savedCam;
   if (savedSettings) Object.assign(settings, savedSettings, { sizes: { ...savedSettings.sizes } });
   // Settings saved before the shape tools existed can name a tool that is not here.
-  if (!['pen', 'eraser', 'stroke-eraser', 'select', 'line', 'rect', 'ellipse', 'polygon'].includes(settings.tool)) settings.tool = 'pen';
+  if (!['pen', 'eraser', 'stroke-eraser', 'select', 'line', 'rect', 'ellipse', 'polygon', 'text'].includes(settings.tool)) settings.tool = 'pen';
   renderer.setItems(await store.getAllItems());
   navigator.storage?.persist?.().catch(() => {});
 
@@ -151,6 +153,7 @@ async function main() {
   let eraser: ReturnType<typeof attachEraser> | undefined;
   let select: ReturnType<typeof attachSelect> | undefined;
   let shapes: ReturnType<typeof attachShapes> | undefined;
+  let text: ReturnType<typeof attachText> | undefined;
   let prevTool = settings.tool;
   const applyTool = () => {
     if (settings.tool !== prevTool) {
@@ -162,6 +165,7 @@ async function main() {
       if (isEraserTool(settings.tool)) settings.eraserSize = size; else settings.size = size;
       prevTool = settings.tool;
       shapes?.cancel();
+      text?.finish();
       toolbar.sync();
     }
     document.body.dataset.tool = settings.tool;
@@ -239,6 +243,7 @@ async function main() {
     updateGrid(board, c);
     toolbar.setZoom(c.zoom);
     renderer.requestRedraw();
+    text?.refresh();
     saveMeta();
   };
 
@@ -273,6 +278,8 @@ async function main() {
     // Selecting an icon deliberately leaves the toolbar alone: it must never
     // overwrite the colour or size you chose with those of an old icon.
     onSelect: () => refreshZ(),
+    // A double tap on a text opens it for typing.
+    onEditText: t => { select?.clear(); text?.edit(t); },
     onArmChange: kind => {
       panel.setArmed(kind);
       document.body.dataset.armed = kind ? '1' : '';
@@ -297,6 +304,7 @@ async function main() {
   window.addEventListener('resize', measure);
 
   shapes = attachShapes({ board, renderer, getSettings: () => settings, isNavigating: nav.isNavigating, onCommit: commit });
+  text = attachText({ board, renderer, getSettings: () => settings, isNavigating: nav.isNavigating, onCommit: commit });
 
   /** Enables the stacking arrows only when the selection has room to move that way. */
   function refreshZ() {
@@ -367,6 +375,7 @@ async function main() {
   const setTool = (t: Tool) => { settings.tool = t; toolbar.sync(); applyTool(); saveMeta(); };
 
   window.addEventListener('keydown', e => {
+    if (e.target instanceof HTMLTextAreaElement) return;
     if (e.target instanceof HTMLInputElement && e.target.type === 'text') return;
     const mod = e.metaKey || e.ctrlKey;
     if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
@@ -382,6 +391,14 @@ async function main() {
     else if (!mod && e.key.toLowerCase() === 'r') setTool('rect');
     else if (!mod && e.key.toLowerCase() === 'o') setTool('ellipse');
     else if (!mod && e.key.toLowerCase() === 'g') setTool('polygon');
+    else if (!mod && e.key.toLowerCase() === 't') setTool('text');
+    else if (e.key === 'Enter' && renderer.selection && isText(renderer.selection)) {
+      // Enter on a selected text opens it for typing.
+      e.preventDefault();
+      const t = renderer.selection;
+      select?.clear();
+      text?.edit(t);
+    }
     else if (!mod && e.key.toLowerCase() === 'i') { toolbar.setIconsOpen(panel.toggle()); }
     else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); select?.deleteSelected(); }
     else if (e.key === 'Escape') select?.clear();

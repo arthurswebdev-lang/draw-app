@@ -5,7 +5,8 @@ import {
 } from '../geometry/selection';
 import { shapeItemBBox, snapLine } from '../geometry/shape';
 import { Renderer } from '../render/strokes';
-import { Change, IconItem, isIcon, Selectable, ShapeItem, ToolSettings } from '../types';
+import { MIN_FONT, textBBox } from '../geometry/text';
+import { Change, IconItem, isIcon, isText, Selectable, ShapeItem, TextItem, ToolSettings } from '../types';
 
 type Mode = 'move' | 'resize' | 'rotate' | 'vertex';
 
@@ -13,9 +14,12 @@ type Mode = 'move' | 'resize' | 'rotate' | 'vertex';
 const TOUCH_HANDLE_HIT = 28;
 
 const closedShape = (s: ShapeItem) => s.shape === 'rect' || s.shape === 'ellipse' || s.shape === 'polygon';
-const fillOf = (i: Selectable) => (isIcon(i) ? undefined : i.fill);
-const turnsByRotation = (i: Selectable) => isIcon(i) || i.shape === 'rect' || i.shape === 'ellipse';
-const rotationOf = (i: Selectable) => (isIcon(i) ? i.rotation : i.rotation ?? 0);
+const fillOf = (i: Selectable) => (isIcon(i) || isText(i) ? undefined : i.fill);
+const sizeOf = (i: Selectable) => (isText(i) ? i.fontSize : i.size);
+const turnsByRotation = (i: Selectable) => isIcon(i) || isText(i) || i.shape === 'rect' || i.shape === 'ellipse';
+const rotationOf = (i: Selectable) => (isIcon(i) || isText(i) ? i.rotation : i.rotation ?? 0);
+/** Two presses on the same text within this time open it for typing. */
+const DOUBLE_TAP_MS = 400;
 
 /**
  * Placing an icon, then picking things up: moving, resizing, turning, and for a
@@ -42,6 +46,8 @@ export function attachSelect(opts: {
   onSelect: (i: Selectable | null) => void;
   /** Called when an icon becomes armed for placing, or stops being. */
   onArmChange?: (kind: string | null) => void;
+  /** A double tap on a text: edit its words. */
+  onEditText?: (t: TextItem) => void;
 }) {
   const { board, renderer } = opts;
   let mode: Mode | null = null;
@@ -55,6 +61,7 @@ export function attachSelect(opts: {
   let grab = { x: 0, y: 0 };
   let startAngle = 0;
   let startDist = 0;
+  let lastTap = { id: '', at: 0 };
 
   const world = (e: PointerEvent) => screenToWorld(renderer.camera, e.clientX, e.clientY);
   const near = (a: { x: number; y: number }, b: { x: number; y: number }, within: number) =>
@@ -77,7 +84,7 @@ export function attachSelect(opts: {
     restyleFrom = null;
     const now = renderer.selection;
     if (!before || !now || now.id !== before.id) return;
-    if (now.color === before.color && now.size === before.size && fillOf(now) === fillOf(before)) return;
+    if (now.color === before.color && sizeOf(now) === sizeOf(before) && fillOf(now) === fillOf(before)) return;
     opts.onCommit({ removed: [before], added: [now] });
   }
 
@@ -133,6 +140,13 @@ export function attachSelect(opts: {
 
     // A tap pad makes a thin icon or line catchable by thumb.
     const hit = renderer.selectableAt(p.x, p.y, 6 / renderer.camera.zoom);
+    if (hit && isText(hit) && lastTap.id === hit.id && e.timeStamp - lastTap.at < DOUBLE_TAP_MS) {
+      lastTap = { id: '', at: 0 };
+      e.preventDefault(); // keep the focus on the text box that opens now
+      opts.onEditText?.(hit);
+      return;
+    }
+    lastTap = { id: hit?.id ?? '', at: e.timeStamp };
     renderer.select(hit);
     opts.onSelect(hit);
     if (!hit) return;
@@ -173,6 +187,14 @@ export function attachSelect(opts: {
         q = { x, y };
       }
       next = moveVertex(s, partIndex, q);
+    } else if (isText(original)) {
+      // Like an icon: scaled about the centre by how far the finger moved out.
+      const c = selectionBox(original);
+      const factor = startDist === 0 ? 1 : Math.hypot(p.x - c.x, p.y - c.y) / startDist;
+      const fontSize = Math.max(MIN_FONT, original.fontSize * factor);
+      const k = fontSize / original.fontSize;
+      next = { ...original, fontSize, w: original.w * k, h: original.h * k };
+      (next as TextItem).bbox = textBBox(next as TextItem);
     } else if (isIcon(original)) {
       // Scaled by how much further the finger is from the centre than the corner
       // it grabbed, so the corner stays under the finger whatever the rotation.
@@ -287,6 +309,11 @@ export function attachSelect(opts: {
         if (patch.color !== undefined) next.color = patch.color;
         if (patch.size !== undefined) next.size = patch.size;
         next.bbox = iconBBox(next);
+      } else if (isText(cur)) {
+        // Only the colour: the size slider means line width, which text does not have.
+        // Text is made bigger or smaller with the corner handles.
+        if (patch.color === undefined) return true;
+        next = { ...cur, color: patch.color };
       } else {
         next = { ...cur };
         if (patch.color !== undefined) next.color = patch.color;

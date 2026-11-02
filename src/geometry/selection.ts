@@ -1,4 +1,5 @@
-import { isIcon, Selectable, ShapeItem } from '../types';
+import { isIcon, isShape, isText, Selectable, ShapeItem } from '../types';
+import { textBBox } from './text';
 import { iconBBox } from './icon';
 import { Pt } from './erase';
 import { shapeItemBBox } from './shape';
@@ -29,6 +30,7 @@ function pointBounds(q: number[]) {
 /** The box the selection handles are drawn around. */
 export function selectionBox(it: Selectable): OBox {
   if (isIcon(it)) return { x: it.x, y: it.y, hw: it.box / 2, hh: it.box / 2, rotation: it.rotation };
+  if (isText(it)) return { x: it.x, y: it.y, hw: it.w / 2, hh: it.h / 2, rotation: it.rotation };
   const q = it.pts;
   if (isBoxShape(it)) {
     return {
@@ -68,7 +70,7 @@ const pointsOf = (q: number[]): Pt[] => {
  */
 export function handlesFor(it: Selectable, zoom: number) {
   const h = boxHandles(selectionBox(it), zoom);
-  if (isIcon(it) || isBoxShape(it)) return { ...h, vertices: [] as Pt[], box: true };
+  if (isIcon(it) || isText(it) || isBoxShape(it)) return { ...h, vertices: [] as Pt[], box: true };
   if (it.shape === 'line') return { ...h, corners: [] as Pt[], vertices: pointsOf(it.pts), box: false };
   return { ...h, vertices: pointsOf(it.pts), box: true };
 }
@@ -87,6 +89,11 @@ export function translateItem(it: Selectable, dx: number, dy: number): Selectabl
     next.bbox = iconBBox(next);
     return next;
   }
+  if (isText(it)) {
+    const next = { ...it, x: it.x + dx, y: it.y + dy };
+    next.bbox = textBBox(next);
+    return next;
+  }
   return withShape(it, it.pts.map((v, i) => v + (i % 2 ? dy : dx)));
 }
 
@@ -95,6 +102,11 @@ export function rotateItem(it: Selectable, delta: number): Selectable {
   if (isIcon(it)) {
     const next = { ...it, rotation: it.rotation + delta };
     next.bbox = iconBBox(next);
+    return next;
+  }
+  if (isText(it)) {
+    const next = { ...it, rotation: it.rotation + delta };
+    next.bbox = textBBox(next);
     return next;
   }
   if (isBoxShape(it)) return withShape(it, it.pts, (it.rotation ?? 0) + delta);
@@ -160,7 +172,10 @@ export function moveVertex(s: ShapeItem, index: number, p: Pt): ShapeItem {
 /** True when two items have the same geometry, so a tap that moved nothing is not an action. */
 export function sameGeometry(a: Selectable, b: Selectable): boolean {
   if (isIcon(a) && isIcon(b)) return a.x === b.x && a.y === b.y && a.box === b.box && a.rotation === b.rotation;
-  if (!isIcon(a) && !isIcon(b)) {
+  if (isText(a) && isText(b)) {
+    return a.x === b.x && a.y === b.y && a.fontSize === b.fontSize && a.rotation === b.rotation && a.text === b.text;
+  }
+  if (isShape(a) && isShape(b)) {
     return (a.rotation ?? 0) === (b.rotation ?? 0) && a.pts.length === b.pts.length && a.pts.every((v, i) => v === b.pts[i]);
   }
   return false;

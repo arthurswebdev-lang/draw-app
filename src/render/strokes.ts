@@ -1,4 +1,5 @@
-import { Camera, IconItem, isIcon, isShape, Item, Selectable, ShapeItem, Stroke, STRIDE } from '../types';
+import { Camera, IconItem, isIcon, isShape, isText, Item, Selectable, ShapeItem, Stroke, STRIDE, TextItem } from '../types';
+import { hitText, LINE_HEIGHT, TEXT_FONT } from '../geometry/text';
 import { intersects } from '../geometry/bbox';
 import { polyline, smooth, toPath2D } from '../geometry/smooth';
 import { iconDef } from '../icons/library';
@@ -16,7 +17,12 @@ export class Renderer {
    * move, so this stays a view over `items` rather than a second array that would
    * have to be kept in step with it.
    */
-  get strokes(): Stroke[] { return this.items.filter(i => !isIcon(i) && !isShape(i)) as Stroke[]; }
+  get strokes(): Stroke[] { return this.items.filter(i => !isIcon(i) && !isShape(i) && !isText(i)) as Stroke[]; }
+
+  get texts(): TextItem[] { return this.items.filter(isText); }
+
+  /** The text being typed into: the text box shows it, so the board must not draw it too. */
+  editingId: string | null = null;
 
   get shapes(): ShapeItem[] { return this.items.filter(isShape); }
 
@@ -151,9 +157,24 @@ export class Renderer {
     if (turned) ctx.restore();
   }
 
+  private drawText(ctx: CanvasRenderingContext2D, t: TextItem) {
+    if (t.id === this.editingId) return;
+    ctx.save();
+    ctx.translate(t.x, t.y);
+    ctx.rotate(t.rotation);
+    ctx.font = `${t.fontSize}px ${TEXT_FONT}`;
+    ctx.fillStyle = t.color;
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'left';
+    const lh = t.fontSize * LINE_HEIGHT;
+    t.text.split('\n').forEach((line, n) => ctx.fillText(line, -t.w / 2, -t.h / 2 + lh * (n + 0.5)));
+    ctx.restore();
+  }
+
   private drawItem(ctx: CanvasRenderingContext2D, i: Item) {
     if (isIcon(i)) this.drawIcon(ctx, i);
     else if (isShape(i)) this.drawShape(ctx, i);
+    else if (isText(i)) this.drawText(ctx, i);
     else this.drawStroke(ctx, i, this.pathFor(i));
   }
 
@@ -241,7 +262,7 @@ export class Renderer {
    * drawn and while it is resized, turned or reshaped. Icons have none.
    */
   private drawSelectionGuide(ctx: CanvasRenderingContext2D, i: Selectable) {
-    if (isIcon(i)) return;
+    if (!isShape(i)) return;
     const c = this.camera;
     const g = guidesFor(i.shape, i.pts, c.zoom, i.rotation ?? 0);
     if (!g) return;
@@ -354,6 +375,7 @@ export class Renderer {
       const i = this.items[n];
       if (isIcon(i) && hitIcon(i, wx, wy, pad)) return i;
       if (isShape(i) && shapeTouches(i, p, p, pad)) return i;
+      if (isText(i) && hitText(i, wx, wy, pad)) return i;
     }
     return null;
   }

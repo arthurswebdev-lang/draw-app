@@ -1,3 +1,4 @@
+import { textTouches } from '../geometry/text';
 import { Renderer } from '../render/strokes';
 import { screenToWorld } from '../camera';
 import { Change, Item, Stroke, STRIDE, ToolSettings } from '../types';
@@ -94,6 +95,12 @@ export function attachEraser(opts: {
       const bb = ic.bbox;
       if (bb.maxX < sweep.minX || bb.minX > sweep.maxX || bb.maxY < sweep.minY || bb.minY > sweep.maxY) continue;
       if (renderer.iconTouches(ic, a, b, radius)) remove.push(ic);
+    }
+    // Text goes whole too, when the eraser touches its box.
+    for (const t of renderer.texts) {
+      const bb = t.bbox;
+      if (bb.maxX < sweep.minX || bb.minX > sweep.maxX || bb.maxY < sweep.minY || bb.minY > sweep.maxY) continue;
+      if (textTouches(t, a, b, radius)) remove.push(t);
     }
     if (!remove.length && !add.length) return;
     for (const r of remove) {
