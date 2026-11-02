@@ -1,0 +1,15 @@
+{
+  "name": "draw-sync-server",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Tiny local WebSocket server that syncs the Draw app between devices on the same Wi-Fi",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "setup": "node setup.mjs",
+    "autostart": "node autostart.mjs"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

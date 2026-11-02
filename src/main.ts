@@ -12,7 +12,9 @@ import { zoomAt } from './camera';
 import { createToolbar } from './ui/toolbar';
 import { createIconsPanel } from './ui/icons-panel';
 import { exportPng, lastBackground, PngBackground, rememberBackground, shareOrSave } from './export/png';
-import { chooseBackground, confirmNew } from './ui/modal';
+import { chooseBackground, confirmNew, openSyncDialog } from './ui/modal';
+import { createSync } from './sync/client';
+import type { WireChange } from './sync/wire';
 import { History } from './state/history';
 import { iconDef } from './icons/library';
 import { Camera, Change, Selectable, Tool, ToolSettings } from './types';
@@ -46,6 +48,34 @@ async function main() {
 
   const guard = (p: Promise<unknown>) =>
     p.then(() => { badge.hidden = true; }, err => { console.error(err); badge.hidden = false; });
+
+  /**
+   * Keeps the board in step with the other devices through the sync server on the
+   * Mac (sync-server/). Changes from there go on the board and into the database,
+   * but not into this device's undo history: undo only undoes your own actions.
+   */
+  const sync = createSync({
+    getItems: () => renderer.items,
+    applyRemote: c => {
+      const sel = renderer.selection;
+      renderer.applyChange(c.removed, c.added);
+      guard(store.applyChange(c.removed, c.added));
+      if (sel) {
+        const now = c.added.find(i => i.id === sel.id);
+        if (now) select?.selectItem(now as Selectable);
+        else if (c.removed.some(i => i.id === sel.id)) select?.clear();
+      }
+      refreshZ();
+    },
+    setRemoteLive: (from, live) => renderer.setRemoteLive(from, live),
+    loadOutbox: () => store.getMeta<WireChange[]>('syncOutbox'),
+    saveOutbox: o => store.setMeta('syncOutbox', o),
+  });
+  /** Every change made on this device: saved here, and sent to the other devices. */
+  const save = (c: Change) => {
+    guard(store.applyChange(c.removed, c.added));
+    sync.local(c);
+  };
 
   let metaTimer = 0;
   const saveMeta = () => {
@@ -84,6 +114,11 @@ async function main() {
     onIcons: () => { toolbar.setIconsOpen(panel.toggle()); },
     onShare: () => { void shareFlow(true); },
     onNew: () => { void newFlow(); },
+    onSync: () => openSyncDialog({
+      subscribe: fn => sync.subscribe(fn),
+      onConnect: url => sync.setUrl(url),
+      onTurnOff: () => sync.setUrl(null),
+    }),
     onZOrder: dir => zOrder(dir),
     // The colours and line size also restyle the selected icon.
     onRestyle: patch => {
@@ -165,7 +200,7 @@ async function main() {
     shapes?.cancel();
     if (renderer.items.length === 0) { setCamera({ x: 0, y: 0, zoom: 1 }); return; }
     select?.flush();
-    const ok = await confirmNew({ onSaveCopy: () => shareFlow(false) });
+    const ok = await confirmNew({ onSaveCopy: () => shareFlow(false), synced: sync.status.state !== 'off' });
     if (!ok) return;
     const change = { removed: [...renderer.items], added: [] as typeof renderer.items };
     select?.clear();
@@ -173,7 +208,7 @@ async function main() {
     renderer.applyChange(change.removed, []);
     history.push(change);
     refreshHistory();
-    guard(store.applyChange(change.removed, change.added));
+    save(change);
     setCamera({ x: 0, y: 0, zoom: 1 });
   }
   const refreshHistory = () => toolbar.setHistory(history.canUndo, history.canRedo);
@@ -197,9 +232,12 @@ async function main() {
   const commit = (c: Change) => {
     history.push(c);
     refreshHistory();
-    guard(store.applyChange(c.removed, c.added));
+    save(c);
   };
-  attachPen({ board, renderer, getSettings: () => settings, isNavigating: nav.isNavigating, onCommit: commit });
+  attachPen({
+    board, renderer, getSettings: () => settings, isNavigating: nav.isNavigating, onCommit: commit,
+    onLive: (pts, color, size) => sync.live(pts, color, size),
+  });
   eraser = attachEraser({ board, renderer, getSettings: () => settings, isNavigating: nav.isNavigating, onCommit: commit });
   select = attachSelect({
     board, renderer,
@@ -287,7 +325,7 @@ async function main() {
     if (!c) return;
     select?.clear();
     renderer.applyChange(c.added, c.removed);
-    guard(store.applyChange(c.added, c.removed));
+    save({ removed: c.added, added: c.removed });
     refreshHistory();
   }
   function redo() {
@@ -296,7 +334,7 @@ async function main() {
     if (!c) return;
     select?.clear();
     renderer.applyChange(c.removed, c.added);
-    guard(store.applyChange(c.removed, c.added));
+    save(c);
     refreshHistory();
   }
 
@@ -331,6 +369,8 @@ async function main() {
   });
 
   refreshHistory();
+  sync.subscribe(s => toolbar.setSync(s.state));
+  void sync.start();
 }
 
 main();

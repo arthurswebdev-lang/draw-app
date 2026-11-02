@@ -1,5 +1,8 @@
+import type { SyncStatus } from '../sync/client';
+import { displayUrl, normalizeUrl } from '../sync/wire';
+
 /** Asks before clearing the board. Resolves true only for "Start new". */
-export function confirmNew(opts: { onSaveCopy: () => Promise<void> }): Promise<boolean> {
+export function confirmNew(opts: { onSaveCopy: () => Promise<void>; synced?: boolean }): Promise<boolean> {
   return new Promise(resolve => {
     const previous = document.activeElement as HTMLElement | null;
     const backdrop = document.createElement('div');
@@ -7,7 +10,7 @@ export function confirmNew(opts: { onSaveCopy: () => Promise<void> }): Promise<b
     backdrop.innerHTML = `
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" aria-describedby="modal-text">
         <h2 id="modal-title">Start a new drawing?</h2>
-        <p id="modal-text">This clears the board. You can undo it right away, but save a copy first if you want to keep this drawing.</p>
+        <p id="modal-text">This clears the board${opts.synced ? ' on this device and on your other synced devices' : ''}. You can undo it right away, but save a copy first if you want to keep this drawing.</p>
         <div class="modal-actions">
           <button type="button" class="m-secondary" data-act="save">Save a copy</button>
           <button type="button" class="m-danger" data-act="new">Start new</button>
@@ -110,4 +113,103 @@ export function chooseBackground(opts: {
     document.body.appendChild(backdrop);
     backdrop.querySelector<HTMLButtonElement>(`[data-bg="${opts.initial}"]`)!.focus();
   });
+}
+
+const escapeHtml = (t: string) => t.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
+
+/**
+ * The sync dialog: the server address, the live connection state, and buttons to
+ * connect or turn sync off. It stays open and updates while connecting.
+ */
+export function openSyncDialog(opts: {
+  subscribe: (fn: (s: SyncStatus) => void) => () => void;
+  onConnect: (url: string) => void;
+  onTurnOff: () => void;
+}) {
+  const previous = document.activeElement as HTMLElement | null;
+  const backdrop = document.createElement('div');
+  backdrop.className = 'modal-backdrop';
+  backdrop.innerHTML = `
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="sync-title">
+      <h2 id="sync-title">Sync</h2>
+      <p>Draw on one device and see it on the others. Every device needs the same address: the sync server on your Mac.</p>
+      <label class="m-field" for="sync-url">Server address</label>
+      <input class="m-input" id="sync-url" type="text" inputmode="url" autocapitalize="off" autocorrect="off"
+        spellcheck="false" placeholder="your-mac.local:8443" />
+      <div class="m-status" data-state="off" role="status"><i></i><span></span></div>
+      <p class="m-help" hidden></p>
+      <div class="modal-actions">
+        <button type="button" class="m-danger" data-act="off" hidden>Turn off sync</button>
+        <button type="button" class="m-secondary" data-act="connect">Connect</button>
+        <button type="button" class="m-cancel" data-act="close">Close</button>
+      </div>
+    </div>`;
+  const input = backdrop.querySelector<HTMLInputElement>('#sync-url')!;
+  const statusEl = backdrop.querySelector<HTMLElement>('.m-status')!;
+  const statusText = statusEl.querySelector('span')!;
+  const help = backdrop.querySelector<HTMLElement>('.m-help')!;
+  const connectBtn = backdrop.querySelector<HTMLButtonElement>('[data-act="connect"]')!;
+  const offBtn = backdrop.querySelector<HTMLButtonElement>('[data-act="off"]')!;
+  const focusables = () => [input, ...backdrop.querySelectorAll<HTMLButtonElement>('button:not([hidden])')];
+
+  let current: SyncStatus | null = null;
+  const render = (s: SyncStatus) => {
+    const first = current === null;
+    current = s;
+    if (first && s.url) input.value = displayUrl(s.url);
+    statusEl.dataset.state = s.state;
+    const waiting = s.pending ? ` · ${s.pending} change${s.pending === 1 ? '' : 's'} waiting` : '';
+    statusText.textContent = {
+      off: 'Sync is off',
+      connecting: 'Connecting…',
+      synced: `Connected · ${s.peers} device${s.peers === 1 ? '' : 's'}${waiting}`,
+      offline: `Cannot reach the server${waiting}`,
+    }[s.state];
+    offBtn.hidden = s.state === 'off';
+    connectBtn.textContent = s.state === 'off' ? 'Connect' : 'Reconnect';
+    if (s.state === 'offline' && s.url) {
+      // Opening the server's page in the browser is the quickest check: it fails
+      // with a certificate warning if this device does not trust the certificate yet.
+      const page = s.url.replace(/^ws/, 'http');
+      help.innerHTML = `Check that the server is running on the Mac and that both devices are on the same Wi-Fi.
+        Then <a href="${escapeHtml(page)}" target="_blank" rel="noopener">open the server page</a>:
+        it should say “Draw sync server is running”. A certificate warning means this device
+        does not trust the certificate yet.`;
+      help.hidden = false;
+    } else help.hidden = true;
+  };
+  const unsubscribe = opts.subscribe(render);
+
+  const close = () => {
+    unsubscribe();
+    window.removeEventListener('keydown', onKey, true);
+    backdrop.remove();
+    previous?.focus?.();
+  };
+  const connect = () => {
+    const url = normalizeUrl(input.value);
+    if (!url) { input.focus(); input.select(); return; }
+    input.value = displayUrl(url);
+    opts.onConnect(url);
+  };
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); }
+    else if (e.key === 'Enter' && document.activeElement === input) { e.preventDefault(); connect(); }
+    else if (e.key === 'Tab') {
+      const list = focusables();
+      const i = list.indexOf(document.activeElement as HTMLInputElement);
+      const next = e.shiftKey ? (i <= 0 ? list.length - 1 : i - 1) : (i + 1) % list.length;
+      e.preventDefault();
+      list[next].focus();
+    } else e.stopPropagation(); // typing must not reach the board's shortcuts
+  };
+  window.addEventListener('keydown', onKey, true);
+  backdrop.addEventListener('pointerdown', e => { if (e.target === backdrop) close(); });
+  connectBtn.onclick = connect;
+  offBtn.onclick = () => { opts.onTurnOff(); };
+  backdrop.querySelector<HTMLButtonElement>('[data-act="close"]')!.onclick = close;
+
+  document.body.appendChild(backdrop);
+  if (!input.value) input.focus();
+  else connectBtn.focus();
 }

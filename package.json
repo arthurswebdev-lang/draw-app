@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "sync-setup": "npm --prefix sync-server install && node sync-server/setup.mjs",
+    "sync-server": "node sync-server/server.mjs",
+    "sync-autostart": "node sync-server/autostart.mjs"
   },
   "dependencies": {
     "idb": "^8.0.3"

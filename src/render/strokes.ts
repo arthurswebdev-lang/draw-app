@@ -377,6 +377,16 @@ export class Renderer {
     }
   }
 
+  /** Strokes being drawn right now on other devices, by device. */
+  private remoteLive = new Map<string, { points: Float32Array; color: string; size: number }>();
+
+  setRemoteLive(from: string, live: { points: Float32Array; color: string; size: number } | null) {
+    if (live) this.remoteLive.set(from, live); else this.remoteLive.delete(from);
+    if (!this.liveRaf) {
+      this.liveRaf = requestAnimationFrame(() => { this.liveRaf = 0; this.redrawLive(); });
+    }
+  }
+
   // ---- shape being drawn ----
   private draft: { item: ShapeItem | null; markers: { x: number; y: number }[]; ring: { x: number; y: number } | null; guide: Guide | null } | null = null;
 
@@ -486,9 +496,15 @@ export class Renderer {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, this.liveCanvas.width, this.liveCanvas.height);
     this.drawDraft(ctx);
-    if (!this.live) return;
+    if (!this.live && !this.remoteLive.size) return;
     this.applyTransform(ctx);
-    const { points, color, size } = this.live;
+    for (const l of this.remoteLive.values()) this.drawLiveStroke(ctx, l);
+    if (this.live) this.drawLiveStroke(ctx, this.live);
+  }
+
+  private drawLiveStroke(ctx: CanvasRenderingContext2D, l: { points: Float32Array; color: string; size: number }) {
+    const { points, color, size } = l;
+    if (!points.length) return;
     const path = toPath2D(smooth(points), size);
     ctx.strokeStyle = color;
     ctx.fillStyle = color;

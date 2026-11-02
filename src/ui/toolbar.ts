@@ -37,6 +37,14 @@ const NEW_ICON = svg('<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0
 // Stacking order: the selected object moves one step in front of, or behind, its neighbour.
 const CHEVRON_UP = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m6 15 6-6 6 6"/></svg>';
 const CHEVRON_DOWN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
+// Two arrows going round: sync with the other devices. The dot shows the state.
+const SYNC_ICON = svg('<path d="M20 11a8 8 0 0 0-14.3-4.9L4 8"/><path d="M4 3v5h5"/><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16"/><path d="M20 21v-5h-5"/>');
+const SYNC_TITLES = {
+  off: 'Sync with your other devices: off',
+  connecting: 'Sync: connecting…',
+  synced: 'Sync: connected',
+  offline: 'Sync: cannot reach the server; changes wait and are sent later',
+} as const;
 const LIBRARY_ICON = svg('<rect x="3" y="3" width="7" height="7" rx="1"/><circle cx="17.5" cy="6.5" r="3.5"/><path d="M3 21l3.5-7L10 21z"/><rect x="14" y="14" width="7" height="7" rx="1"/>');
 
 /** A toolbar button that stands for several tools, and shows the one in use. */
@@ -59,6 +67,7 @@ export function createToolbar(el: HTMLElement, opts: {
   onZOrder: (dir: 1 | -1) => void;
   onShare: () => void;
   onNew: () => void;
+  onSync: () => void;
   /** The colour or line size was picked: restyle the selected icon, if any. */
   onRestyle?: (patch: { color?: string; size?: number; fill?: string | null }) => void;
 }) {
@@ -102,6 +111,7 @@ export function createToolbar(el: HTMLElement, opts: {
       <button id="icons" title="Icon library (I)" aria-label="Icon library">${LIBRARY_ICON}</button>
       <button id="share" title="Share or save as PNG" aria-label="Share or save as PNG">${SHARE_ICON}</button>
       <button id="new" title="New drawing" aria-label="New drawing">${NEW_ICON}</button>
+      <button id="sync" title="${SYNC_TITLES.off}" aria-label="Sync" data-state="off">${SYNC_ICON}<i class="syncdot"></i></button>
     </div>
     <div class="grp zoomgrp">
       <button id="zoomout" title="Zoom out" aria-label="Zoom out">−</button>
@@ -305,6 +315,7 @@ export function createToolbar(el: HTMLElement, opts: {
   icons.onclick = opts.onIcons;
   q('#share').onclick = () => opts.onShare();
   q('#new').onclick = () => opts.onNew();
+  q('#sync').onclick = () => opts.onSync();
   let zoomNow = 1;
   undo.onclick = opts.onUndo;
   redo.onclick = opts.onRedo;
@@ -368,5 +379,10 @@ export function createToolbar(el: HTMLElement, opts: {
     setHistory(canUndo: boolean, canRedo: boolean) { undo.disabled = !canUndo; redo.disabled = !canRedo; },
     setZoom(z: number) { zoomNow = z; zoom.textContent = `${Math.round(z * 100)}%`; sync(); },
     setIconsOpen(open: boolean) { icons.classList.toggle('open', open); },
+    setSync(state: keyof typeof SYNC_TITLES) {
+      const b = q<HTMLButtonElement>('#sync');
+      b.dataset.state = state;
+      b.title = SYNC_TITLES[state];
+    },
   };
 }

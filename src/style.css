@@ -71,7 +71,17 @@ body { position: fixed; inset: 0; -webkit-user-select: none; user-select: none; 
 #toolbar .tool .cap { font-size: 10.5px; line-height: 1; color: #495057; }
 #toolbar #icons { width: 44px; padding: 0; display: grid; place-items: center; }
 #toolbar #icons svg, #toolbar #share svg, #toolbar #new svg { width: 22px; height: 22px; }
-#toolbar #share, #toolbar #new { width: 44px; padding: 0; display: grid; place-items: center; }
+#toolbar #share, #toolbar #new, #toolbar #sync { width: 44px; padding: 0; display: grid; place-items: center; }
+#toolbar #sync svg { width: 22px; height: 22px; }
+/* Sync status: grey off or unreachable, orange connecting, green connected. */
+#toolbar #sync { position: relative; }
+.syncdot {
+  position: absolute; top: 5px; right: 5px; width: 9px; height: 9px; border-radius: 50%;
+  background: #adb5bd; box-shadow: 0 0 0 2px #f1f1f3;
+}
+#sync[data-state="off"] .syncdot { display: none; }
+#sync[data-state="connecting"] .syncdot { background: #f08c00; }
+#sync[data-state="synced"] .syncdot { background: #2f9e44; }
 #toolbar #zoomout, #toolbar #zoomin { font-size: 20px; padding: 0; }
 #toolbar #zoom { min-width: 58px; }
 
@@ -342,3 +352,17 @@ body[data-armed="1"] #board { cursor: copy; }
   background-image: conic-gradient(#d0d4d9 25%, #fff 0 50%, #d0d4d9 0 75%, #fff 0);
   background-size: 12px 12px;
 }
+
+/* --- sync dialog ------------------------------------------------------------ */
+.modal label.m-field { display: block; font-size: 14px; color: #495057; margin: 0 0 6px; }
+.modal input.m-input {
+  width: 100%; box-sizing: border-box; min-height: 44px; padding: 0 12px; margin: 0 0 14px;
+  font-size: 16px; border: 1.5px solid #ced4da; border-radius: 10px; color: #212529; background: #fff;
+}
+.modal input.m-input:focus { outline: none; border-color: #1971c2; }
+.modal .m-status { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; font-size: 15px; color: #212529; }
+.modal .m-status i { width: 10px; height: 10px; border-radius: 50%; background: #adb5bd; flex: 0 0 auto; }
+.modal .m-status[data-state="connecting"] i { background: #f08c00; }
+.modal .m-status[data-state="synced"] i { background: #2f9e44; }
+.modal p.m-help { font-size: 14px; margin: 0 0 14px; }
+.modal p.m-help a { color: #1971c2; }

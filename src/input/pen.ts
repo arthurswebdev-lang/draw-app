@@ -10,6 +10,8 @@ export function attachPen(opts: {
   getSettings: () => ToolSettings;
   isNavigating: () => boolean;
   onCommit: (c: Change) => void;
+  /** The points so far while drawing (the same array, growing), then null when the stroke ends. */
+  onLive?: (pts: number[] | null, color: string, size: number) => void;
 }) {
   const { board, renderer, getSettings, isNavigating, onCommit } = opts;
   let activeId: number | null = null;
@@ -40,6 +42,7 @@ export function attachPen(opts: {
     pts = [];
     pushEvent(e);
     renderer.setLive(new Float32Array(pts), color, size);
+    opts.onLive?.(pts, color, size);
   });
 
   board.addEventListener('pointermove', e => {
@@ -47,6 +50,7 @@ export function attachPen(opts: {
     const events = e.getCoalescedEvents?.() ?? [e];
     for (const ev of events.length ? events : [e]) pushEvent(ev);
     renderer.setLive(new Float32Array(pts), color, size);
+    opts.onLive?.(pts, color, size);
   });
 
   const end = (e: PointerEvent) => {
@@ -65,6 +69,9 @@ export function attachPen(opts: {
     renderer.applyChange([], [stroke]);
     renderer.setLive(null);
     onCommit({ removed: [], added: [stroke] });
+    // After the commit, so another device gets the finished stroke before the
+    // preview goes away, and never sees a gap.
+    opts.onLive?.(null, color, size);
   };
   board.addEventListener('pointerup', end);
   board.addEventListener('pointercancel', end);
@@ -75,6 +82,7 @@ export function attachPen(opts: {
     activeId = null;
     pts = [];
     renderer.setLive(null);
+    opts.onLive?.(null, color, size);
   });
   board.addEventListener('contextmenu', e => e.preventDefault());
 }

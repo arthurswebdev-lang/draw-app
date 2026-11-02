@@ -64,6 +64,16 @@ The icon library is `src/icons/library.ts` (SVG path data in a 0..100 box, group
 
 `export/png.ts`: asks white vs transparent background (remembered in localStorage), then `navigator.share({ files })`. Pass **only the file** — adding `title`/`text` makes some iOS share targets send just the text and drop the image. Falls back to a download if sharing is unavailable.
 
+### Sync between devices (`src/sync/`, `sync-server/`)
+
+Optional LAN sync through a small Node WebSocket server on the user's Mac (`sync-server/`, its own `package.json` with `ws`; setup in `sync-server/README.md`). The page is https, so the server must be `wss://` with an mkcert certificate the iPad trusts. `sync-server/board.mjs` is plain JS shared with the app and tests (`sig` must match on both sides; types in `board.d.mts`).
+
+- All local edits go through `save(c)` in `main.ts` (commit, undo, redo, New), which writes IndexedDB and calls `sync.local(c)`. A new code path that changes items must use it too, or the other devices never see the change.
+- `sync/client.ts`: outbox (meta key `syncOutbox`) → `change` messages, removed by the server's `ack`. On connect: `hello {outbox, have: id→sig}` → `state {ids, items, want}` → `reconcile()` (`sync/wire.ts`). Remote changes go through `applyRemote` in `main.ts`: renderer + DB, never history. Socket is closed when the page is hidden and reopened when visible. The address is in localStorage (`draw-sync-url`).
+- Wire format: strokes' `points` travel as number arrays (`encodeItem`/`decodeItem`); removed items as ids.
+- Live preview: the pen's `onLive` → throttled incremental `live` messages → `renderer.setRemoteLive` on the live canvas.
+- `tests/sync-e2e.test.ts` starts the real server (temp `SYNC_DATA_DIR`); it is skipped unless `sync-server/node_modules` exists.
+
 ## Deployment
 
 Pushing to `main` runs `.github/workflows/deploy.yml` (npm ci → test → build → GitHub Pages). The app is a project site at `https://arthurswebdev-lang.github.io/draw-app/` (Vite `base: './'`, so keep asset and manifest URLs relative; the manifest `id`/`scope`/`start_url` are the absolute `/draw-app/`). `public/sw.js` is a network-first service worker.
