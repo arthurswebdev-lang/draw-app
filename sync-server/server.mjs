@@ -154,6 +154,11 @@ wss.on('connection', (ws, req) => {
       case 'view':
       case 'view-request':
         // Where a device is looking, for devices in follow mode. Passed on, never stored.
+        if (msg.type === 'view-request') log(`${name} wants to follow`);
+        else if (Date.now() - (me.viewLogged ?? 0) > 3000) {
+          me.viewLogged = Date.now();
+          log(`View from ${name}: x ${Math.round(msg.x)} y ${Math.round(msg.y)} w ${Math.round(msg.w)} h ${Math.round(msg.h)} -> ${ready().length - 1} other device(s)`);
+        }
         toOthers(ws, { ...msg, from: me.id });
         break;
       case 'live': {
