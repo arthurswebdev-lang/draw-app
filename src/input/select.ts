@@ -312,6 +312,13 @@ export function attachSelect(opts: {
       opts.onSelect(null);
       opts.onCommit({ removed: [i], added: [] });
     },
+    /** Selects `i` (already on the board), as if it had been tapped. */
+    selectItem(i: Selectable) {
+      flush();
+      setArmed(null);
+      renderer.select(i);
+      opts.onSelect(i);
+    },
     clear() {
       flush();
       setArmed(null);

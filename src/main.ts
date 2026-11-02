@@ -17,6 +17,7 @@ import { History } from './state/history';
 import { iconDef } from './icons/library';
 import { Camera, Change, Selectable, Tool, ToolSettings } from './types';
 import { reorder } from './state/zorder';
+import { pasteCopy } from './state/clipboard';
 
 async function main() {
   const board = document.getElementById('board')!;
@@ -253,6 +254,33 @@ async function main() {
     refreshZ();
   }
 
+  /**
+   * Copy and paste of the selected object. The clipboard is a snapshot taken at copy
+   * time (items are never changed in place), so moving or deleting the original
+   * afterwards does not change what gets pasted.
+   */
+  let clipboard: Selectable | null = null;
+  function copy(): boolean {
+    select?.flush();
+    const sel = renderer.selection;
+    if (!sel) return false;
+    clipboard = sel;
+    return true;
+  }
+  function cut() {
+    if (copy()) select?.deleteSelected();
+  }
+  function paste() {
+    if (!clipboard) return;
+    select?.flush();
+    if (settings.tool !== 'select') setTool('select');
+    const item = pasteCopy(clipboard, renderer.items, renderer.camera.zoom);
+    renderer.applyChange([], [item]);
+    select?.selectItem(item);
+    commit({ removed: [], added: [item] });
+    refreshZ();
+  }
+
   function undo() {
     select?.flush();
     const c = history.undo();
@@ -279,6 +307,9 @@ async function main() {
     const mod = e.metaKey || e.ctrlKey;
     if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
     else if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
+    else if (mod && e.key.toLowerCase() === 'c') { if (renderer.selection) { e.preventDefault(); copy(); } }
+    else if (mod && e.key.toLowerCase() === 'x') { if (renderer.selection) { e.preventDefault(); cut(); } }
+    else if (mod && e.key.toLowerCase() === 'v') { if (clipboard) { e.preventDefault(); paste(); } }
     else if (!mod && e.key.toLowerCase() === 'p') setTool('pen');
     else if (!mod && e.key.toLowerCase() === 'e') setTool('eraser');
     else if (!mod && e.key.toLowerCase() === 'x') setTool('stroke-eraser');
