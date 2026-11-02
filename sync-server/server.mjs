@@ -75,6 +75,13 @@ if (insecure) {
   server = createHttps({ cert: readFileSync(certFile), key: readFileSync(keyFile) }, page);
 }
 
+// A device that reaches the Mac but does not trust the certificate fails here,
+// before any WebSocket exists. Logged, because the app can only say "cannot reach".
+server.on('tlsClientError', (err, socket) => {
+  log('Certificate/TLS problem with', socket?.remoteAddress ?? 'a device', '-', err.message);
+});
+server.on('request', req => log('Page opened from', req.socket.remoteAddress));
+
 // ---- WebSocket ----
 const wss = new WebSocketServer({
   server,
