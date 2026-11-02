@@ -47,6 +47,8 @@ Log (autostart): `sync-server/data/server.log`. The board copy: `sync-server/dat
   other devices while it is being drawn.
 - When a device connects (or comes back from the background) it sends what it did
   while offline, and gets what it missed. The first connect merges both boards.
+- **Follow mode** (a switch in the Sync dialog): this device shows the area the other
+  device is looking at and moves with it. Moving or zooming on this device turns it off.
 - Deleted items are remembered ("tombstones") so an offline device cannot bring
   them back. If two devices change the same item, the last change wins.
 - Undo only undoes your own actions on that device.

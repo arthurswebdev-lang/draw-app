@@ -71,6 +71,7 @@ Optional LAN sync through a small Node WebSocket server on the user's Mac (`sync
 - All local edits go through `save(c)` in `main.ts` (commit, undo, redo, New), which writes IndexedDB and calls `sync.local(c)`. A new code path that changes items must use it too, or the other devices never see the change.
 - `sync/client.ts`: outbox (meta key `syncOutbox`) → `change` messages, removed by the server's `ack`. On connect: `hello {outbox, have: id→sig}` → `state {ids, items, want}` → `reconcile()` (`sync/wire.ts`). Remote changes go through `applyRemote` in `main.ts`: renderer + DB, never history. Socket is closed when the page is hidden and reopened when visible. The address is in localStorage (`draw-sync-url`).
 - Wire format: strokes' `points` travel as number arrays (`encodeItem`/`decodeItem`); removed items as ids.
+- Follow mode (`setFollow`, localStorage `draw-sync-follow`): devices that do not follow send `view` messages (their visible world rect, `viewOf`) when the camera moves; a follower fits it with `fitView` via `showCamera` (no re-send). In `main.ts`, `setCamera` means a user move: it turns follow off; remote and resize refits use `showCamera`.
 - Live preview: the pen's `onLive` → throttled incremental `live` messages → `renderer.setRemoteLive` on the live canvas.
 - `tests/sync-e2e.test.ts` starts the real server (temp `SYNC_DATA_DIR`); it is skipped unless `sync-server/node_modules` exists.
 

@@ -366,3 +366,9 @@ body[data-armed="1"] #board { cursor: copy; }
 .modal .m-status[data-state="synced"] i { background: #2f9e44; }
 .modal p.m-help { font-size: 14px; margin: 0 0 14px; }
 .modal p.m-help a { color: #1971c2; }
+.modal label.m-toggle {
+  display: flex; gap: 12px; align-items: flex-start; margin: 4px 0 18px; padding: 12px;
+  border-radius: 10px; background: #f1f3f5; font-size: 14px; line-height: 1.4; color: #495057; cursor: pointer;
+}
+.modal label.m-toggle b { color: #212529; font-size: 15px; }
+.modal label.m-toggle input { width: 22px; height: 22px; margin: 1px 0 0; flex: 0 0 auto; accent-color: #1971c2; }

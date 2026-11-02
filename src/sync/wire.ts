@@ -1,5 +1,5 @@
 import type { WireChange, WireItem } from '../../sync-server/board.mjs';
-import { Change, Item } from '../types';
+import { Camera, Change, Item, MAX_ZOOM, MIN_ZOOM } from '../types';
 
 export type { WireChange, WireItem };
 
@@ -83,4 +83,21 @@ export function reconcile(
   const removed = local.filter(i => target.get(i.id) !== i);
   const added = [...target.values()].filter(i => mine.get(i.id) !== i);
   return { removed, added };
+}
+
+/** The part of the board a device shows, in world units: its top-left corner and size. */
+export type View = { x: number; y: number; w: number; h: number };
+
+export const viewOf = (cam: Camera, screenW: number, screenH: number): View =>
+  ({ x: cam.x, y: cam.y, w: screenW / cam.zoom, h: screenH / cam.zoom });
+
+/**
+ * The camera that shows another device's view on this screen: the same middle,
+ * zoomed so all of that area fits (screens differ in shape, so one side gets a
+ * margin).
+ */
+export function fitView(v: View, screenW: number, screenH: number): Camera {
+  const zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.min(screenW / v.w, screenH / v.h)));
+  const cx = v.x + v.w / 2, cy = v.y + v.h / 2;
+  return { x: cx - screenW / zoom / 2, y: cy - screenH / zoom / 2, zoom };
 }

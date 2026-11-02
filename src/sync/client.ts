@@ -1,6 +1,6 @@
 import { sig } from '../../sync-server/board.mjs';
 import { Change, Item } from '../types';
-import { decodeItem, encodeChange, encodeItem, reconcile, WireChange, WireItem } from './wire';
+import { decodeItem, encodeChange, encodeItem, reconcile, View, WireChange, WireItem } from './wire';
 
 /**
  * - off: no server address set.
@@ -10,13 +10,18 @@ import { decodeItem, encodeChange, encodeItem, reconcile, WireChange, WireItem }
  *   background). Changes wait in the outbox and are sent on reconnect.
  */
 export type SyncState = 'off' | 'connecting' | 'synced' | 'offline';
-export type SyncStatus = { state: SyncState; peers: number; pending: number; url: string | null };
+export type SyncStatus = { state: SyncState; peers: number; pending: number; url: string | null; follow: boolean };
 export type RemoteLive = { points: Float32Array; color: string; size: number };
 
 const URL_KEY = 'draw-sync-url';
 const readUrl = () => { try { return localStorage.getItem(URL_KEY) || null; } catch { return null; } };
 const writeUrl = (u: string | null) => {
   try { if (u) localStorage.setItem(URL_KEY, u); else localStorage.removeItem(URL_KEY); } catch { /* private mode */ }
+};
+const FOLLOW_KEY = 'draw-sync-follow';
+const readFollow = () => { try { return localStorage.getItem(FOLLOW_KEY) === '1'; } catch { return false; } };
+const writeFollow = (on: boolean) => {
+  try { if (on) localStorage.setItem(FOLLOW_KEY, '1'); else localStorage.removeItem(FOLLOW_KEY); } catch { /* private mode */ }
 };
 const round = (v: number) => Math.round(v * 100) / 100;
 
@@ -26,6 +31,8 @@ type ServerMsg =
   | { type: 'ack' }
   | { type: 'peers'; count: number }
   | { type: 'pong' }
+  | ({ type: 'view'; from: string } & View)
+  | { type: 'view-request'; from: string }
   | { type: 'live'; from: string; end?: boolean; start?: number; pts?: number[]; color?: string; size?: number };
 
 /**
@@ -44,6 +51,10 @@ export function createSync(opts: {
   setRemoteLive: (from: string, live: RemoteLive | null) => void;
   loadOutbox: () => Promise<WireChange[] | undefined>;
   saveOutbox: (o: WireChange[]) => Promise<unknown>;
+  /** The part of the board this device shows now. */
+  getView: () => View;
+  /** Another device's view, while this device follows. */
+  onRemoteView: (v: View) => void;
 }) {
   let url = readUrl();
   let outbox: WireChange[] = [];
@@ -54,13 +65,19 @@ export function createSync(opts: {
   /** How many outbox entries were sent on this connection and wait for an ack. */
   let sentCount = 0;
   let peers = 0;
+  /**
+   * Follow mode: this device shows whatever area another device is looking at.
+   * A device that follows never sends its own view, so two devices can never
+   * chase each other.
+   */
+  let following = readFollow();
   let state: SyncState = url ? 'offline' : 'off';
   let retry = 0;
   let retryTimer = 0;
   const listeners = new Set<(s: SyncStatus) => void>();
   const remoteStrokes = new Map<string, number[]>();
 
-  const status = (): SyncStatus => ({ state, peers, pending: outbox.length, url });
+  const status = (): SyncStatus => ({ state, peers, pending: outbox.length, url, follow: following });
   const emit = () => { const s = status(); for (const l of listeners) l(s); };
   const setState = (s: SyncState) => { state = s; emit(); };
 
@@ -171,6 +188,8 @@ export function createSync(opts: {
         flush();
         persist();
         setState('synced');
+        if (following) send({ type: 'view-request' });
+        else sendView();
         break;
       }
       case 'change': {
@@ -193,8 +212,16 @@ export function createSync(opts: {
         pingTimer = 0;
         break;
       case 'peers':
+        // Someone new may want to follow this device: tell them where it is.
+        if (msg.count > peers && !following) sendView();
         peers = msg.count;
         emit();
+        break;
+      case 'view':
+        if (following) opts.onRemoteView({ x: msg.x, y: msg.y, w: msg.w, h: msg.h });
+        break;
+      case 'view-request':
+        if (!following) sendView();
         break;
       case 'live': {
         if (msg.end) {
@@ -209,6 +236,16 @@ export function createSync(opts: {
         break;
       }
     }
+  }
+
+  // ---- this device's view, for devices that follow it ----
+  let viewTimer = 0;
+  function sendView() {
+    clearTimeout(viewTimer);
+    viewTimer = 0;
+    if (!synced || following) return;
+    const v = opts.getView();
+    send({ type: 'view', x: round(v.x), y: round(v.y), w: round(v.w), h: round(v.h) });
   }
 
   // ---- the stroke being drawn here, shown live on the other devices ----
@@ -266,6 +303,20 @@ export function createSync(opts: {
       outbox.push(encodeChange(c));
       persist();
       flush();
+      emit();
+    },
+    /** This device's view moved (pan, zoom, resize). Sent at most every 60 ms. */
+    viewChanged() {
+      if (!synced || following || viewTimer) return;
+      viewTimer = window.setTimeout(sendView, 60);
+    },
+    get following() { return following; },
+    setFollow(on: boolean) {
+      if (following === on) return;
+      following = on;
+      writeFollow(on);
+      if (on) send({ type: 'view-request' });
+      else sendView();
       emit();
     },
     /** The pen's points while drawing, or null when the stroke ends or is thrown away. */

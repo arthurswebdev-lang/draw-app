@@ -26,6 +26,8 @@ Object.assign(globalThis, {
 
 function device(name: string, start: Item[]) {
   let items = [...start];
+  let view = { x: 0, y: 0, w: 1000, h: 700 };
+  const seen: unknown[] = [];
   let outbox: unknown;
   const lives: unknown[] = [];
   const s = createSync({
@@ -37,9 +39,13 @@ function device(name: string, start: Item[]) {
     setRemoteLive: (_f, l) => lives.push(l),
     loadOutbox: async () => outbox as never,
     saveOutbox: async o => { outbox = o; },
+    getView: () => view,
+    onRemoteView: v => { seen.push(v); },
   });
   return {
-    name, s, lives,
+    name, s, lives, seen,
+    /** The user pans or zooms. */
+    look(v: typeof view) { view = v; s.viewChanged(); },
     get items() { return items; },
     draw(c: Change) {
       const gone = new Set(c.removed.map(i => i.id));
@@ -111,6 +117,19 @@ describe.skipIf(!canRun)('sync end to end (real server)', () => {
     expect(ids(A.items)).toEqual(ids(B.items));
     expect(ids(A.items)).toEqual(['a-new', 'a-offline']);
     expect(A.s.status.pending + B.s.status.pending).toBe(0);
+
+    // Follow mode: B follows A. A's view arrives at once, and every move after it.
+    B.s.setFollow(true);
+    await wait(200);
+    expect(B.seen.at(-1)).toEqual({ x: 0, y: 0, w: 1000, h: 700 });
+    A.look({ x: 9600, y: 5500, w: 800, h: 600 });
+    await wait(200);
+    expect(B.seen.at(-1)).toEqual({ x: 9600, y: 5500, w: 800, h: 600 });
+    // A follower never sends its own view, so A does not start moving with B.
+    B.look({ x: 1, y: 1, w: 1, h: 1 });
+    await wait(200);
+    expect(A.seen).toEqual([]);
+    B.s.setFollow(false);
     A.s.setUrl(null); B.s.setUrl(null);
   }, 10000);
 });

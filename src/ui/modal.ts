@@ -125,6 +125,7 @@ export function openSyncDialog(opts: {
   subscribe: (fn: (s: SyncStatus) => void) => () => void;
   onConnect: (url: string) => void;
   onTurnOff: () => void;
+  onFollow: (on: boolean) => void;
 }) {
   const previous = document.activeElement as HTMLElement | null;
   const backdrop = document.createElement('div');
@@ -138,6 +139,11 @@ export function openSyncDialog(opts: {
         spellcheck="false" placeholder="your-mac.local:8443" />
       <div class="m-status" data-state="off" role="status"><i></i><span></span></div>
       <p class="m-help" hidden></p>
+      <label class="m-toggle">
+        <input type="checkbox" id="sync-follow" />
+        <span><b>Follow the other device</b><br />
+        Show the area the other device is looking at, and move with it. Moving or zooming here turns it off.</span>
+      </label>
       <div class="modal-actions">
         <button type="button" class="m-danger" data-act="off" hidden>Turn off sync</button>
         <button type="button" class="m-secondary" data-act="connect">Connect</button>
@@ -150,7 +156,8 @@ export function openSyncDialog(opts: {
   const help = backdrop.querySelector<HTMLElement>('.m-help')!;
   const connectBtn = backdrop.querySelector<HTMLButtonElement>('[data-act="connect"]')!;
   const offBtn = backdrop.querySelector<HTMLButtonElement>('[data-act="off"]')!;
-  const focusables = () => [input, ...backdrop.querySelectorAll<HTMLButtonElement>('button:not([hidden])')];
+  const follow = backdrop.querySelector<HTMLInputElement>('#sync-follow')!;
+  const focusables = () => [input, follow, ...backdrop.querySelectorAll<HTMLButtonElement>('button:not([hidden])')];
 
   let current: SyncStatus | null = null;
   const render = (s: SyncStatus) => {
@@ -158,6 +165,7 @@ export function openSyncDialog(opts: {
     current = s;
     if (first && s.url) input.value = displayUrl(s.url);
     statusEl.dataset.state = s.state;
+    follow.checked = s.follow;
     const waiting = s.pending ? ` · ${s.pending} change${s.pending === 1 ? '' : 's'} waiting` : '';
     statusText.textContent = {
       off: 'Sync is off',
@@ -195,6 +203,7 @@ export function openSyncDialog(opts: {
   const onKey = (e: KeyboardEvent) => {
     if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); }
     else if (e.key === 'Enter' && document.activeElement === input) { e.preventDefault(); connect(); }
+    else if (e.key === ' ' && document.activeElement === follow) { /* let the checkbox toggle */ }
     else if (e.key === 'Tab') {
       const list = focusables();
       const i = list.indexOf(document.activeElement as HTMLInputElement);
@@ -206,6 +215,7 @@ export function openSyncDialog(opts: {
   window.addEventListener('keydown', onKey, true);
   backdrop.addEventListener('pointerdown', e => { if (e.target === backdrop) close(); });
   connectBtn.onclick = connect;
+  follow.onchange = () => opts.onFollow(follow.checked);
   offBtn.onclick = () => { opts.onTurnOff(); };
   backdrop.querySelector<HTMLButtonElement>('[data-act="close"]')!.onclick = close;
 

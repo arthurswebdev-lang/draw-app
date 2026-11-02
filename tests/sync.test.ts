@@ -81,3 +81,20 @@ describe('reconcile', () => {
     expect(c.added).toEqual([]); // `late` stays as it is
   });
 });
+
+describe('follow mode view', () => {
+  it('shows the same area on a screen of another shape, centred', async () => {
+    const { fitView, viewOf } = await import('../src/sync/wire');
+    // iPad 1180×820 at zoom 2, looking at x 9600.., y 5500..
+    const v = viewOf({ x: 9600, y: 5500, zoom: 2 }, 1180, 820);
+    expect(v).toEqual({ x: 9600, y: 5500, w: 590, h: 410 });
+    // Mac 1440×900: zoom limited by height (900/410), the middle stays the same.
+    const c = fitView(v, 1440, 900);
+    expect(c.zoom).toBeCloseTo(900 / 410);
+    expect(c.x + 1440 / c.zoom / 2).toBeCloseTo(9600 + 295);
+    expect(c.y + 900 / c.zoom / 2).toBeCloseTo(5500 + 205);
+    // The whole area is visible.
+    expect(c.x).toBeLessThanOrEqual(9600);
+    expect(c.x + 1440 / c.zoom).toBeGreaterThanOrEqual(9600 + 590);
+  });
+});

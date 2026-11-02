@@ -151,6 +151,11 @@ wss.on('connection', (ws, req) => {
         save();
         break;
       }
+      case 'view':
+      case 'view-request':
+        // Where a device is looking, for devices in follow mode. Passed on, never stored.
+        toOthers(ws, { ...msg, from: me.id });
+        break;
       case 'live': {
         // A stroke being drawn: passed on, never stored.
         toOthers(ws, { ...msg, from: me.id });

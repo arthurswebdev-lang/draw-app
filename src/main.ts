@@ -14,7 +14,7 @@ import { createIconsPanel } from './ui/icons-panel';
 import { exportPng, lastBackground, PngBackground, rememberBackground, shareOrSave } from './export/png';
 import { chooseBackground, confirmNew, openSyncDialog } from './ui/modal';
 import { createSync } from './sync/client';
-import type { WireChange } from './sync/wire';
+import { fitView, View, viewOf, WireChange } from './sync/wire';
 import { History } from './state/history';
 import { iconDef } from './icons/library';
 import { Camera, Change, Selectable, Tool, ToolSettings } from './types';
@@ -70,7 +70,14 @@ async function main() {
     setRemoteLive: (from, live) => renderer.setRemoteLive(from, live),
     loadOutbox: () => store.getMeta<WireChange[]>('syncOutbox'),
     saveOutbox: o => store.setMeta('syncOutbox', o),
+    getView: () => viewOf(renderer.camera, window.innerWidth, window.innerHeight),
+    onRemoteView: v => {
+      followed = v;
+      showCamera(fitView(v, window.innerWidth, window.innerHeight));
+    },
   });
+  /** The last view received in follow mode, to fit again when this window is resized. */
+  let followed: View | null = null;
   /** Every change made on this device: saved here, and sent to the other devices. */
   const save = (c: Change) => {
     guard(store.applyChange(c.removed, c.added));
@@ -118,6 +125,7 @@ async function main() {
       subscribe: fn => sync.subscribe(fn),
       onConnect: url => sync.setUrl(url),
       onTurnOff: () => sync.setUrl(null),
+      onFollow: on => sync.setFollow(on),
     }),
     onZOrder: dir => zOrder(dir),
     // The colours and line size also restyle the selected icon.
@@ -213,7 +221,20 @@ async function main() {
   }
   const refreshHistory = () => toolbar.setHistory(history.canUndo, history.canRedo);
 
+  /**
+   * The user moved the view (pan, pinch, wheel, zoom buttons). In follow mode that
+   * means "let me look myself", so following stops; otherwise followers are told.
+   */
   const setCamera = (c: Camera) => {
+    if (sync.following) {
+      sync.setFollow(false);
+      followed = null;
+      toast('Follow is off. Turn it on again in Sync.');
+    }
+    showCamera(c);
+    sync.viewChanged();
+  };
+  const showCamera = (c: Camera) => {
     renderer.camera = c;
     updateGrid(board, c);
     toolbar.setZoom(c.zoom);
@@ -223,7 +244,12 @@ async function main() {
 
   createSurface(
     [document.getElementById('strokes') as HTMLCanvasElement, document.getElementById('live') as HTMLCanvasElement],
-    () => renderer.requestRedraw(),
+    () => {
+      renderer.requestRedraw();
+      // A new window size shows a different area: refit in follow mode, else tell followers.
+      if (sync.following && followed) showCamera(fitView(followed, window.innerWidth, window.innerHeight));
+      else sync.viewChanged();
+    },
   );
   updateGrid(board, renderer.camera);
   toolbar.setZoom(renderer.camera.zoom);
